@@ -4,9 +4,18 @@ import com.github.ericytsang.lib.repo.Repo
 
 enum class Order {ASC,DESC}
 
+fun <T:Comparable<T>> Order.isAfterOrEqual(curr:T,next:T):Boolean
+{
+    return when(this)
+    {
+        Order.ASC -> next >= curr
+        Order.DESC -> next <= curr
+    }
+}
+
 // read-only delta repo
 
-interface DeltaRepo:Repo
+interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>:Repo
 {
     companion object
     {
@@ -16,7 +25,7 @@ interface DeltaRepo:Repo
     {
         val id:Long
     }
-    interface Item
+    interface Item<out Pk:Item.Pk,SubClass:DeltaRepo.Item<Pk,SubClass>>
     {
         interface Pk
         {
@@ -33,23 +42,23 @@ interface DeltaRepo:Repo
             deleteStamp:Long = deleteStamp,
             isSynced:Boolean = isSynced,
             isDeleted:Boolean = isDeleted)
-            :Item
+            :SubClass
     }
     val pk:Pk
-    fun selectByPk(pk:Item.Pk):Item?
+    fun selectByPk(pk:ItemPk):Item?
     fun pageByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
     fun pageByDeleteStamp(start:Long,order:Order,limit:Int):List<Item>
 }
 
 // mutable delta repo
 
-interface MutableDeltaRepo:DeltaRepo
+interface MutableDeltaRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>:DeltaRepo<ItemPk,Item>
 {
     /**
      * inserts [item] into the repo. replaces any existing record with the same
      * [DeltaRepo.Item.pk].
      */
-    fun insertOrReplace(item:DeltaRepo.Item)
+    fun insertOrReplace(item:Item)
 
     /**
      * delete all where [DeltaRepo.Item.deleteStamp] < [minDeleteStampToKeep].
@@ -59,24 +68,24 @@ interface MutableDeltaRepo:DeltaRepo
     /**
      * returns the next unused primary key.
      */
-    fun computeNextPk():DeltaRepo.Item.Pk
+    fun computeNextPk():ItemPk
 }
 
 // read-only master & mirror repos
 
-interface MasterRepo:DeltaRepo
+interface MasterRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>:DeltaRepo<ItemPk,Item>
 
-interface MirrorRepo:DeltaRepo
+interface MirrorRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>:DeltaRepo<ItemPk,Item>
 {
     /**
      * selects the next [limit] [DeltaRepo.Item]s to sync to the [MasterRepo].
      */
-    fun selectNextUnsyncedToSync(limit:Int):List<DeltaRepo.Item>
+    fun selectNextUnsyncedToSync(limit:Int):List<Item>
 }
 
 // master & mirror repo adapters
 
-interface MasterRepoAdapter:MutableDeltaRepo,MasterRepo
+interface MasterRepoAdapter<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>:MutableDeltaRepo<ItemPk,Item>,MasterRepo<ItemPk,Item>
 {
     /**
      * returns the next unused update stamp.
@@ -89,11 +98,11 @@ interface MasterRepoAdapter:MutableDeltaRepo,MasterRepo
     fun computeNextDeleteStamp():Long
 }
 
-interface MirrorRepoAdapter:MutableDeltaRepo,MirrorRepo
+interface MirrorRepoAdapter<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>:MutableDeltaRepo<ItemPk,Item>,MirrorRepo<ItemPk,Item>
 
 // mutable master & mirror repos
 
-interface MutableMasterRepo:MasterRepo
+interface MutableMasterRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>:MasterRepo<ItemPk,Item>
 {
     /**
      * inserts [item] into the repo. replaces any existing record whose
@@ -107,34 +116,44 @@ interface MutableMasterRepo:MasterRepo
      * - [DeltaRepo.Item.deleteStamp] = [MasterRepoAdapter.computeNextDeleteStamp]
      * - [DeltaRepo.Item.updateStamp] = [MasterRepoAdapter.computeNextUpdateStamp]
      */
-    fun insertOrReplace(item:DeltaRepo.Item)
+    fun insertOrReplace(item:Item)
 
     /**
      * inserts items from
      */
-    fun merge(items:Set<DeltaRepo.Item>)
+    fun merge(items:Set<Item>)
 
     /**
      * delete all where [DeltaRepo.Item.pk] == [pk].
      */
-    fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
+    fun deleteByPk(pks:Set<ItemPk>)
+
+    /**
+     * returns the next unused primary key.
+     */
+    fun computeNextPk():ItemPk
 }
 
-interface MutableMirrorRepo:MirrorRepo
+interface MutableMirrorRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>:MirrorRepo<ItemPk,Item>
 {
-    fun synchronizeWith(source:DeltaRepo)
+    fun synchronizeWith(source:DeltaRepo<ItemPk,Item>)
 
     /**
      * inserts [item] into the repo. replaces any existing record with the same
      * [DeltaRepo.Item.pk]. the [item]'s [DeltaRepo.Item.isSynced] will be set
      * to false by this function when it is inserted.
      */
-    fun insertOrReplace(item:DeltaRepo.Item)
+    fun insertOrReplace(item:Item)
 
     /**
      * [DeltaRepo.Item.isDeleted] = true
      * [DeltaRepo.Item.isSynced] = false
      * where [DeltaRepo.Item.pk] == [pk].
      */
-    fun deleteByPk(pk:DeltaRepo.Item.Pk)
+    fun deleteByPk(pk:ItemPk)
+
+    /**
+     * returns the next unused primary key.
+     */
+    fun computeNextPk():ItemPk
 }
