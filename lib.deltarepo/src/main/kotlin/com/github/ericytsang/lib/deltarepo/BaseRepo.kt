@@ -36,7 +36,7 @@ open class BaseRepo:Repo
 
     protected fun checkCanRead()
     {
-        check(Thread.currentThread() in readers)
+        check(readWriteLock.isWriteLockedByCurrentThread || Thread.currentThread() in readers)
     }
 
     protected fun checkCanWrite()

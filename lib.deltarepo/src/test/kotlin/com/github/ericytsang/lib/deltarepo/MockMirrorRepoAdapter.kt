@@ -17,8 +17,8 @@ class MockMirrorRepoAdapter:MirrorRepoAdapter<MockMirrorRepoAdapter.MockItem.Pk,
             override val pk:Repo.Item.Pk)
             :DeltaRepo.Item.Pk
         override fun copy(
-            updateStamp:Long,
-            deleteStamp:Long,
+            updateStamp:Long?,
+            deleteStamp:Long?,
             isSynced:Boolean,
             isDeleted:Boolean)
             :MockItem
@@ -39,7 +39,7 @@ class MockMirrorRepoAdapter:MirrorRepoAdapter<MockMirrorRepoAdapter.MockItem.Pk,
         return block()
     }
 
-    override val pk:DeltaRepo.Pk = SimpleDeltaRepoPk(1)
+    override val pk:DeltaRepo.Pk = DeltaRepoPk(1)
 
     override fun selectByPk(pk:MockItem.Pk):MockItem?
     {

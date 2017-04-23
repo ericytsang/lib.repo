@@ -38,10 +38,10 @@ interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>:R
         val isSynced:Boolean
         val isDeleted:Boolean
         fun copy(
-            updateStamp:Long = updateStamp,
-            deleteStamp:Long = deleteStamp,
-            isSynced:Boolean = isSynced,
-            isDeleted:Boolean = isDeleted)
+            updateStamp:Long? = this.updateStamp,
+            deleteStamp:Long? = this.deleteStamp,
+            isSynced:Boolean = this.isSynced,
+            isDeleted:Boolean = this.isDeleted)
             :SubClass
     }
     val pk:Pk
@@ -119,7 +119,7 @@ interface MutableMasterRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,
     fun insertOrReplace(item:Item)
 
     /**
-     * inserts items from
+     * inserts items from [MirrorRepo]s into this [MasterRepo].
      */
     fun merge(items:Set<Item>)
 

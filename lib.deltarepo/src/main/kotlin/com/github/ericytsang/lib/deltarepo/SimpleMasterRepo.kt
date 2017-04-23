@@ -38,17 +38,18 @@ class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>
         val recordsToDelete = pks
             .mapNotNull {adapter.selectByPk(it)}
             .asSequence()
-        var maxDeleteStampToDelete = recordsToDelete
+        val maxDeleteStampToDelete = recordsToDelete
             .map {it.deleteStamp ?: throw RuntimeException("master repo should not have null for this field")}
             .max() ?: return
+        var pageStart = maxDeleteStampToDelete
 
         // update all where deleteStamp < maxDeleteStamp AND pk NOT IN pks
         do
         {
             // query for records and prepare for next query
-            val records = pageByDeleteStamp(maxDeleteStampToDelete,Order.DESC,DeltaRepo.BATCH_SIZE)
-                .filter {it.deleteStamp == maxDeleteStampToDelete}
-            records.mapNotNull {it.deleteStamp}.min()?.let {maxDeleteStampToDelete = it}
+            val records = pageByDeleteStamp(pageStart,Order.DESC,DeltaRepo.BATCH_SIZE)
+                .filter {it.deleteStamp != pageStart}
+            records.mapNotNull {it.deleteStamp}.min()?.let {pageStart = it}
 
             // update all where deleteStamp < maxDeleteStamp AND pk NOT IN pks
             records.filter {it.pk !in pks}.forEach {
@@ -58,8 +59,8 @@ class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>
         while(records.isNotEmpty())
 
         // delete records...
-        val minDeleteStampToKeep = pageByDeleteStamp(maxDeleteStampToDelete,Order.ASC,1)
-            .singleOrNull()?.deleteStamp ?: Long.MAX_VALUE
+        val minDeleteStampToKeep = pageByDeleteStamp(maxDeleteStampToDelete,Order.ASC,2)
+            .drop(1).singleOrNull()?.deleteStamp ?: Long.MAX_VALUE
         adapter.delete(minDeleteStampToKeep)
     }
 
