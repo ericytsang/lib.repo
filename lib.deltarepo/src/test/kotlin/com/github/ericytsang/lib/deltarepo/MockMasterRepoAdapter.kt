@@ -27,7 +27,7 @@ class MockMasterRepoAdapter:MasterRepoAdapter<MockMasterRepoAdapter.MockItem.Pk,
         }
     }
 
-    private val records = mutableMapOf<MockItem.Pk,MockItem>()
+    val records = mutableMapOf<MockItem.Pk,MockItem>()
 
     override fun <R> read(block:()->R):R
     {

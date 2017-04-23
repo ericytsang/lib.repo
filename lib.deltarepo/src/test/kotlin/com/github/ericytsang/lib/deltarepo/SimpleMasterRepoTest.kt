@@ -5,7 +5,8 @@ import org.junit.Test
 
 class SimpleMasterRepoTest
 {
-    private val testSubject = SimpleMasterRepo(MockMasterRepoAdapter())
+    private val testSubjectAdapter = MockMasterRepoAdapter()
+    private val testSubject = SimpleMasterRepo(testSubjectAdapter)
 
     private val item1 = MockMasterRepoAdapter.MockItem(
         testSubject.write {testSubject.computeNextPk()},null,null,false,false)
@@ -169,8 +170,73 @@ class SimpleMasterRepoTest
         }
     }
 
+    @Test
     fun deleteByPkTest()
     {
+        // insert records that will be deleted
+        testSubject.write {
+            testSubject.insertOrReplace(item1.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item2.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item3.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item4.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item5.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item6.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
+        }
+
+        // check state of test subject
+        testSubject.read {
+            check(testSubject.selectByPk(item1.pk) != null)
+            check(testSubject.selectByPk(item2.pk) != null)
+            check(testSubject.selectByPk(item3.pk) != null)
+            check(testSubject.selectByPk(item4.pk) != null)
+            check(testSubject.selectByPk(item5.pk) != null)
+            check(testSubject.selectByPk(item6.pk) != null)
+        }
+
+        // delete some stuff
+        testSubject.write {
+            testSubject.deleteByPk(setOf(item2.pk))
+        }
+
+        // check state of test subject
+        testSubject.read {
+            check(testSubject.selectByPk(item1.pk) != null)
+            check(testSubject.selectByPk(item2.pk) == null)
+            check(testSubject.selectByPk(item3.pk) != null)
+            check(testSubject.selectByPk(item4.pk) != null)
+            check(testSubject.selectByPk(item5.pk) != null)
+            check(testSubject.selectByPk(item6.pk) != null)
+        }
+
+        // delete some stuff
+        testSubject.write {
+            testSubject.deleteByPk(setOf(item3.pk,item4.pk,item5.pk))
+        }
+
+        // check state of test subject
+        testSubject.read {
+            check(testSubject.selectByPk(item1.pk) != null)
+            check(testSubject.selectByPk(item2.pk) == null)
+            check(testSubject.selectByPk(item3.pk) == null)
+            check(testSubject.selectByPk(item4.pk) == null)
+            check(testSubject.selectByPk(item5.pk) == null)
+            check(testSubject.selectByPk(item6.pk) != null)
+        }
+
+        // delete some stuff
+        testSubject.write {
+            testSubject.deleteByPk(setOf(item2.pk,item3.pk))
+        }
+
+        // check state of test subject
+        testSubject.read {
+            check(testSubject.selectByPk(item1.pk) != null)
+            check(testSubject.selectByPk(item2.pk) == null)
+            check(testSubject.selectByPk(item3.pk) == null)
+            check(testSubject.selectByPk(item4.pk) == null)
+            check(testSubject.selectByPk(item5.pk) == null)
+            check(testSubject.selectByPk(item6.pk) != null)
+        }
     }
 
     @Test
@@ -188,15 +254,83 @@ class SimpleMasterRepoTest
         }
     }
 
+    fun prepareTestSubjectForPageTests()
+    {
+        // insert records that will be deleted
+        testSubject.write {
+            testSubjectAdapter.records[item4.pk] = item4.copy(isDeleted = false)
+            testSubjectAdapter.records[item5.pk] = item5.copy(isDeleted = false)
+            testSubjectAdapter.records[item6.pk] = item6
+        }
+
+        // check state of test subject
+        testSubject.read {
+            check(testSubject.selectByPk(item1.pk) == null)
+            check(testSubject.selectByPk(item2.pk) == null)
+            check(testSubject.selectByPk(item3.pk) == null)
+            check(testSubject.selectByPk(item4.pk) != null)
+            check(testSubject.selectByPk(item5.pk) != null)
+            check(testSubject.selectByPk(item6.pk) != null)
+        }
+    }
+
+    @Test
     fun selectRecordByPkTest()
-    {}
+    {
+        prepareTestSubjectForPageTests()
+    }
 
-    fun selectFakeRecordByPkTest()
-    {}
-
+    @Test
     fun pageByUpdateStampTest()
-    {}
+    {
+        prepareTestSubjectForPageTests()
 
+        testSubject.read {
+            // -.->..
+            check(testSubject.pageByUpdateStamp(Long.MIN_VALUE,Order.ASC,1).map {it.pk} == listOf(item4.pk))
+            // -.-.-.->
+            check(testSubject.pageByUpdateStamp(Long.MIN_VALUE,Order.ASC,10).map {it.pk} == listOf(item4.pk,item5.pk,item6.pk))
+            // ..-.->
+            check(testSubject.pageByUpdateStamp(5,Order.ASC,10).map {it.pk} == listOf(item6.pk))
+            check(testSubject.pageByUpdateStamp(5,Order.ASC,1).map {it.pk} == listOf(item6.pk))
+            // ...->
+            check(testSubject.pageByUpdateStamp(6,Order.ASC,10).isEmpty())
+            // ..<-.-
+            check(testSubject.pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).map {it.pk} == listOf(item6.pk))
+            // <-.-.-.-
+            check(testSubject.pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,10).map {it.pk} == listOf(item6.pk,item5.pk,item4.pk))
+            // <-.-..
+            check(testSubject.pageByUpdateStamp(2,Order.DESC,10).map {it.pk} == listOf(item4.pk))
+            check(testSubject.pageByUpdateStamp(3,Order.DESC,10).map {it.pk} == listOf(item4.pk))
+            // <-...
+            check(testSubject.pageByUpdateStamp(0,Order.DESC,10).isEmpty())
+        }
+    }
+
+    @Test
     fun pageByDeleteStampTest()
-    {}
+    {
+        prepareTestSubjectForPageTests()
+
+        testSubject.read {
+            // -.->..
+            check(testSubject.pageByDeleteStamp(Long.MIN_VALUE,Order.ASC,1).map {it.pk} == listOf(item4.pk))
+            // -.-.-.->
+            check(testSubject.pageByDeleteStamp(Long.MIN_VALUE,Order.ASC,10).map {it.pk} == listOf(item4.pk,item6.pk,item5.pk))
+            // ..-.->
+            check(testSubject.pageByDeleteStamp(5,Order.ASC,10).map {it.pk} == listOf(item5.pk))
+            check(testSubject.pageByDeleteStamp(5,Order.ASC,1).map {it.pk} == listOf(item5.pk))
+            // ...->
+            check(testSubject.pageByDeleteStamp(6,Order.ASC,10).isEmpty())
+            // ..<-.-
+            check(testSubject.pageByDeleteStamp(Long.MAX_VALUE,Order.DESC,1).map {it.pk} == listOf(item5.pk))
+            // <-.-.-.-
+            check(testSubject.pageByDeleteStamp(Long.MAX_VALUE,Order.DESC,10).map {it.pk} == listOf(item5.pk,item6.pk,item4.pk))
+            // <-.-..
+            check(testSubject.pageByDeleteStamp(2,Order.DESC,10).map {it.pk} == listOf(item4.pk))
+            check(testSubject.pageByDeleteStamp(3,Order.DESC,10).map {it.pk} == listOf(item4.pk))
+            // <-...
+            check(testSubject.pageByDeleteStamp(0,Order.DESC,10).isEmpty())
+        }
+    }
 }
