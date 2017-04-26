@@ -1,11 +1,16 @@
 package com.github.ericytsang.lib.deltarepo
 
-class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>>(private val adapter:MasterRepoAdapter<ItemPk,Item>):BaseRepo(),MutableMasterRepo<ItemPk,Item>
+class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(private val adapter:MasterRepoAdapter<ItemPk,Item>):BaseRepo(),MutableMasterRepo<ItemPk,Item>
 {
-    override fun merge(items:Set<Item>)
+    override fun merge(items:Set<Item>,localRepoInterRepoId:DeltaRepoPk,remoteRepoInterRepoId:DeltaRepoPk)
     {
         checkCanWrite()
-        val (toDelete,toInsert) = items.partition {it.isDeleted}
+        val (toDelete,toInsert) = items
+            .asSequence()
+            .localized(localRepoInterRepoId,remoteRepoInterRepoId)
+            .partition {it.isDeleted}
+
+        // update records
         deleteByPk(toDelete.map {it.pk}.toSet())
         toInsert.forEach {insertOrReplace(it)}
     }
@@ -16,13 +21,14 @@ class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>
         require(!item.isDeleted)
         val _item = item
             .copy(
+                Unit,
                 updateStamp = adapter.computeNextUpdateStamp(),
                 isSynced = true)
             .let()
             {
                 if (it.deleteStamp == null)
                 {
-                    it.copy(deleteStamp = adapter.computeNextDeleteStamp())
+                    it.copy(Unit,deleteStamp = adapter.computeNextDeleteStamp())
                 }
                 else
                 {
@@ -53,7 +59,7 @@ class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>
 
             // update all where deleteStamp < maxDeleteStamp AND pk NOT IN pks
             records.filter {it.pk !in pks}.forEach {
-                adapter.insertOrReplace(it.copy(deleteStamp = adapter.computeNextDeleteStamp()))
+                adapter.insertOrReplace(it.copy(Unit,deleteStamp = adapter.computeNextDeleteStamp()))
             }
         }
         while(records.isNotEmpty())
@@ -67,13 +73,7 @@ class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk,Item:DeltaRepo.Item<ItemPk,Item>
     override fun computeNextPk():ItemPk
     {
         checkCanWrite()
-        return adapter.computeNextPk().apply {check(this.nodePk.id == this@SimpleMasterRepo.pk.id)}
-    }
-
-    override val pk:DeltaRepo.Pk get()
-    {
-        checkCanRead()
-        return adapter.pk
+        return adapter.computeNextPk()
     }
 
     override fun selectByPk(pk:ItemPk):Item?

@@ -8,18 +8,12 @@ class SimpleMasterRepoTest
     private val testSubjectAdapter = MockMasterRepoAdapter()
     private val testSubject = SimpleMasterRepo(testSubjectAdapter)
 
-    private val item1 = MockMasterRepoAdapter.MockItem(
-        testSubject.write {testSubject.computeNextPk()},null,null,false,false)
-    private val item2 = MockMasterRepoAdapter.MockItem(
-        testSubject.write {testSubject.computeNextPk()},null,1,false,false)
-    private val item3 = MockMasterRepoAdapter.MockItem(
-        testSubject.write {testSubject.computeNextPk()},1,null,false,false)
-    private val item4 = MockMasterRepoAdapter.MockItem(
-        testSubject.write {testSubject.computeNextPk()},2,2,true,true)
-    private val item5 = MockMasterRepoAdapter.MockItem(
-        testSubject.write {testSubject.computeNextPk()},4,5,false,true)
-    private val item6 = MockMasterRepoAdapter.MockItem(
-        testSubject.write {testSubject.computeNextPk()},5,4,true,false)
+    private val item1 = MockItem(testSubject.write {testSubject.computeNextPk()},null,null,false,false)
+    private val item2 = MockItem(testSubject.write {testSubject.computeNextPk()},null,1,false,false)
+    private val item3 = MockItem(testSubject.write {testSubject.computeNextPk()},1,null,false,false)
+    private val item4 = MockItem(testSubject.write {testSubject.computeNextPk()},2,2,true,true)
+    private val item5 = MockItem(testSubject.write {testSubject.computeNextPk()},4,5,false,true)
+    private val item6 = MockItem(testSubject.write {testSubject.computeNextPk()},5,4,true,false)
 
     @Test
     fun insertTest()
@@ -156,17 +150,17 @@ class SimpleMasterRepoTest
 
         // merge all records
         testSubject.write {
-            testSubject.merge(setOf(item1,item2,item3,item4,item5,item6))
+            testSubject.merge(setOf(item1,item2,item3,item4,item5,item6),DeltaRepoPk(10),DeltaRepoPk(0))
         }
 
-        // check state of test subject
+        // check state of test subject. modify pk used to select records with because of localization parameters.
         testSubject.read {
-            check(testSubject.selectByPk(item1.pk) != null)
-            check(testSubject.selectByPk(item2.pk) != null)
-            check(testSubject.selectByPk(item3.pk) != null)
-            check(testSubject.selectByPk(item4.pk) == null)
-            check(testSubject.selectByPk(item5.pk) == null)
-            check(testSubject.selectByPk(item6.pk) != null)
+            check(testSubject.selectByPk(item1.pk.copy(Unit,nodePk = DeltaRepoPk(0))) != null)
+            check(testSubject.selectByPk(item2.pk.copy(Unit,nodePk = DeltaRepoPk(0))) != null)
+            check(testSubject.selectByPk(item3.pk.copy(Unit,nodePk = DeltaRepoPk(0))) != null)
+            check(testSubject.selectByPk(item4.pk.copy(Unit,nodePk = DeltaRepoPk(0))) == null)
+            check(testSubject.selectByPk(item5.pk.copy(Unit,nodePk = DeltaRepoPk(0))) == null)
+            check(testSubject.selectByPk(item6.pk.copy(Unit,nodePk = DeltaRepoPk(0))) != null)
         }
     }
 
@@ -175,12 +169,12 @@ class SimpleMasterRepoTest
     {
         // insert records that will be deleted
         testSubject.write {
-            testSubject.insertOrReplace(item1.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item2.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item3.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item4.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item5.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item6.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item1.copy(Unit,updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item2.copy(Unit,updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item3.copy(Unit,updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item4.copy(Unit,updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item5.copy(Unit,updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(item6.copy(Unit,updateStamp = null,deleteStamp = null,isDeleted = false))
         }
 
         // check state of test subject
@@ -246,7 +240,7 @@ class SimpleMasterRepoTest
             (0..4).map {testSubject.computeNextPk()}
         }
         testSubject.read {
-            check(pks.all {it.nodePk.id == testSubject.pk.id}) {pks}
+            check(pks.all {it.nodePk == DeltaRepo.LOCAL_NODE_ID}) {pks}
             check(pks.map {it.pk.id} == (pks.first().pk.id..pks.last().pk.id).toList()) {pks}
             check(pks.first().pk.id < pks.last().pk.id)
             check(pks[0].copy() == pks[0])
@@ -275,7 +269,7 @@ class SimpleMasterRepoTest
     }
 
     @Test
-    fun selectRecordByPkTest()
+    fun selectByPkTest()
     {
         prepareTestSubjectForPageTests()
     }

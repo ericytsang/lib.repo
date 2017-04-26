@@ -1,32 +1,7 @@
 package com.github.ericytsang.lib.deltarepo
 
-import com.github.ericytsang.lib.repo.Repo
-
-class MockMasterRepoAdapter:MasterRepoAdapter<MockMasterRepoAdapter.MockItem.Pk,MockMasterRepoAdapter.MockItem>
+class MockMasterRepoAdapter:MasterRepoAdapter<MockItem.Pk,MockItem>
 {
-    data class MockItem(
-        override val pk:Pk,
-        override val updateStamp:Long?,
-        override val deleteStamp:Long?,
-        override val isSynced:Boolean,
-        override val isDeleted:Boolean)
-        :DeltaRepo.Item<MockItem.Pk,MockItem>
-    {
-        data class Pk(
-            override val nodePk:DeltaRepo.Pk,
-            override val pk:Repo.Item.Pk)
-            :DeltaRepo.Item.Pk
-        override fun copy(
-            updateStamp:Long?,
-            deleteStamp:Long?,
-            isSynced:Boolean,
-            isDeleted:Boolean)
-            :MockItem
-        {
-            return copy(pk,updateStamp,deleteStamp,isSynced,isDeleted)
-        }
-    }
-
     val records = mutableMapOf<MockItem.Pk,MockItem>()
 
     override fun <R> read(block:()->R):R
@@ -38,8 +13,6 @@ class MockMasterRepoAdapter:MasterRepoAdapter<MockMasterRepoAdapter.MockItem.Pk,
     {
         return block()
     }
-
-    override val pk:DeltaRepo.Pk = DeltaRepoPk(1)
 
     override fun selectByPk(pk:MockItem.Pk):MockItem?
     {
@@ -84,7 +57,7 @@ class MockMasterRepoAdapter:MasterRepoAdapter<MockMasterRepoAdapter.MockItem.Pk,
 
     override fun computeNextPk():MockItem.Pk
     {
-        return MockItem.Pk(pk,RepoItemPk(prevId++))
+        return MockItem.Pk(DeltaRepo.LOCAL_NODE_ID,RepoItemPk(prevId++))
     }
 
     private var prevUpdateStamp = 0L
