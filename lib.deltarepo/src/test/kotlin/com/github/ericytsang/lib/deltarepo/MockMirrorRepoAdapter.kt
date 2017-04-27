@@ -19,22 +19,13 @@ class MockMirrorRepoAdapter:MirrorRepoAdapter<MockItem.Pk,MockItem>
         return records[pk]?.takeIf {!it.isDeleted}
     }
 
-    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):List<MockItem>
+    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,syncStatus:Set<DeltaRepo.Item.SyncStatus>):List<MockItem>
     {
         return records.values
             .filter {it.updateStamp != null}
             .sortedBy {it.updateStamp}
             .filter {order.isAfterOrEqual(start,it.updateStamp!!) && !it.isDeleted}
-            .let {if (order == Order.DESC) it.asReversed() else it}
-            .take(limit)
-    }
-
-    override fun pageByDeleteStamp(start:Long,order:Order,limit:Int):List<MockItem>
-    {
-        return records.values
-            .filter {it.deleteStamp != null}
-            .sortedBy {it.deleteStamp}
-            .filter {order.isAfterOrEqual(start,it.deleteStamp!!) && !it.isDeleted}
+            .filter {it.syncStatus in syncStatus}
             .let {if (order == Order.DESC) it.asReversed() else it}
             .take(limit)
     }
@@ -44,16 +35,16 @@ class MockMirrorRepoAdapter:MirrorRepoAdapter<MockItem.Pk,MockItem>
         records[item.pk] = item
     }
 
-    override fun delete(minDeleteStampToKeep:Long)
+    override fun delete(minUpdateStampToKeep:Long)
     {
         records.values.removeAll()
         {
-            val deleteStamp = it.deleteStamp ?: return@removeAll false
-            deleteStamp < minDeleteStampToKeep
+            val deleteStamp = it.updateStamp ?: return@removeAll false
+            deleteStamp < minUpdateStampToKeep
         }
     }
 
-    private var prevId = 0L
+    private var prevId = Long.MIN_VALUE
 
     override fun computeNextPk():MockItem.Pk
     {
@@ -62,6 +53,6 @@ class MockMirrorRepoAdapter:MirrorRepoAdapter<MockItem.Pk,MockItem>
 
     override fun selectNextUnsyncedToSync(limit:Int):List<MockItem>
     {
-        return records.values.filter {!it.isSynced}.take(limit)
+        return records.values.filter {it.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY}.take(limit)
     }
 }

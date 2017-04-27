@@ -5,8 +5,7 @@ import com.github.ericytsang.lib.repo.Repo
 data class MockItem(
     override val pk:Pk,
     override val updateStamp:Long?,
-    override val deleteStamp:Long?,
-    override val isSynced:Boolean,
+    override val syncStatus:DeltaRepo.Item.SyncStatus,
     override val isDeleted:Boolean)
     :DeltaRepo.Item<MockItem.Pk,MockItem>
 {
@@ -28,11 +27,10 @@ data class MockItem(
         unit:Unit,
         pk:Pk,
         updateStamp:Long?,
-        deleteStamp:Long?,
-        isSynced:Boolean,
+        syncStatus:DeltaRepo.Item.SyncStatus,
         isDeleted:Boolean)
         :MockItem
     {
-        return copy(pk,updateStamp,deleteStamp,isSynced,isDeleted)
+        return copy(pk,updateStamp,syncStatus,isDeleted)
     }
 }

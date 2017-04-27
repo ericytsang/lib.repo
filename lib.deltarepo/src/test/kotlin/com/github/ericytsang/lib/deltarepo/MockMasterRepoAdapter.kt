@@ -19,22 +19,13 @@ class MockMasterRepoAdapter:MasterRepoAdapter<MockItem.Pk,MockItem>
         return records[pk]
     }
 
-    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):List<MockItem>
+    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,syncStatus:Set<DeltaRepo.Item.SyncStatus>):List<MockItem>
     {
         return records.values
             .filter {it.updateStamp != null}
             .sortedBy {it.updateStamp}
             .filter {order.isAfterOrEqual(start,it.updateStamp!!)}
-            .let {if (order == Order.DESC) it.asReversed() else it}
-            .take(limit)
-    }
-
-    override fun pageByDeleteStamp(start:Long,order:Order,limit:Int):List<MockItem>
-    {
-        return records.values
-            .filter {it.deleteStamp != null}
-            .sortedBy {it.deleteStamp}
-            .filter {order.isAfterOrEqual(start,it.deleteStamp!!)}
+            .filter {it.syncStatus in syncStatus}
             .let {if (order == Order.DESC) it.asReversed() else it}
             .take(limit)
     }
@@ -44,33 +35,26 @@ class MockMasterRepoAdapter:MasterRepoAdapter<MockItem.Pk,MockItem>
         records[item.pk] = item
     }
 
-    override fun delete(minDeleteStampToKeep:Long)
+    override fun delete(minUpdateStampToKeep:Long)
     {
         records.values.removeAll()
         {
-            val deleteStamp = it.deleteStamp ?: return@removeAll false
-            deleteStamp < minDeleteStampToKeep
+            val deleteStamp = it.updateStamp ?: return@removeAll false
+            deleteStamp < minUpdateStampToKeep
         }
     }
 
-    private var prevId = 0L
+    private var prevId = Long.MIN_VALUE
 
     override fun computeNextPk():MockItem.Pk
     {
         return MockItem.Pk(DeltaRepo.LOCAL_NODE_ID,RepoItemPk(prevId++))
     }
 
-    private var prevUpdateStamp = 0L
+    private var prevUpdateStamp = 0L//Long.MIN_VALUE
 
     override fun computeNextUpdateStamp():Long
     {
         return prevUpdateStamp++
-    }
-
-    private var prevDeleteStamp = 0L
-
-    override fun computeNextDeleteStamp():Long
-    {
-        return prevDeleteStamp++
     }
 }

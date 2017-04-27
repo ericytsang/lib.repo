@@ -7,12 +7,12 @@ class SimpleMirrorRepoTest
     private val testSubjectAdapter = MockMirrorRepoAdapter()
     private val testSubject = SimpleMirrorRepo(testSubjectAdapter)
 
-    private val item1 = MockItem(testSubject.write {testSubject.computeNextPk()},null,null,false,false)
-    private val item2 = MockItem(testSubject.write {testSubject.computeNextPk()},null,1,false,false)
-    private val item3 = MockItem(testSubject.write {testSubject.computeNextPk()},1,null,false,false)
-    private val item4 = MockItem(testSubject.write {testSubject.computeNextPk()},2,2,true,true)
-    private val item5 = MockItem(testSubject.write {testSubject.computeNextPk()},4,5,false,true)
-    private val item6 = MockItem(testSubject.write {testSubject.computeNextPk()},5,4,true,false)
+    private val item1 = MockItem(testSubject.write {testSubject.computeNextPk()},null,DeltaRepo.Item.SyncStatus.DIRTY,false)
+    private val item2 = MockItem(testSubject.write {testSubject.computeNextPk()},null,DeltaRepo.Item.SyncStatus.DIRTY,false)
+    private val item3 = MockItem(testSubject.write {testSubject.computeNextPk()},1,DeltaRepo.Item.SyncStatus.DIRTY,false)
+    private val item4 = MockItem(testSubject.write {testSubject.computeNextPk()},2,DeltaRepo.Item.SyncStatus.PULLED,true)
+    private val item5 = MockItem(testSubject.write {testSubject.computeNextPk()},4,DeltaRepo.Item.SyncStatus.DIRTY,true)
+    private val item6 = MockItem(testSubject.write {testSubject.computeNextPk()},5,DeltaRepo.Item.SyncStatus.PULLED,false)
 
     @Test
     fun synchronizeWithTest()
@@ -30,16 +30,17 @@ class SimpleMirrorRepoTest
 
         // insert records into mirror1
         mirror1.write {
-            mirror1.insertOrReplace(MockItem(pks[0],null,null,false,false))
-            mirror1.insertOrReplace(MockItem(pks[1],null,null,false,false))
-            mirror1.insertOrReplace(MockItem(pks[2],null,null,false,false))
-            mirror1.insertOrReplace(MockItem(pks[3],null,null,false,false))
-            mirror1.insertOrReplace(MockItem(pks[4],null,null,false,false))
-            mirror1.insertOrReplace(MockItem(pks[5],null,null,false,false))
-            mirror1.insertOrReplace(MockItem(pks[6],null,null,false,false))
-            mirror1.insertOrReplace(MockItem(pks[7],null,null,false,false))
-            mirror1.insertOrReplace(MockItem(pks[8],null,null,false,false))
-            mirror1.insertOrReplace(MockItem(pks[9],null,null,false,false))
+            mirror1.insertOrReplace(listOf(
+                MockItem(pks[0],null,DeltaRepo.Item.SyncStatus.DIRTY,false),
+                MockItem(pks[1],null,DeltaRepo.Item.SyncStatus.DIRTY,false),
+                MockItem(pks[2],null,DeltaRepo.Item.SyncStatus.DIRTY,false),
+                MockItem(pks[3],null,DeltaRepo.Item.SyncStatus.DIRTY,false),
+                MockItem(pks[4],null,DeltaRepo.Item.SyncStatus.DIRTY,false),
+                MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,false),
+                MockItem(pks[6],null,DeltaRepo.Item.SyncStatus.DIRTY,false),
+                MockItem(pks[7],null,DeltaRepo.Item.SyncStatus.DIRTY,false),
+                MockItem(pks[8],null,DeltaRepo.Item.SyncStatus.DIRTY,false),
+                MockItem(pks[9],null,DeltaRepo.Item.SyncStatus.DIRTY,false)))
         }
 
         // inter repo ids
@@ -49,23 +50,17 @@ class SimpleMirrorRepoTest
 
         // sync records to master & mirror2
         run {
-            // get unsynced from mirror and mark as synced
-            val unsynced = mirror1.read {
-                mirror1.selectNextUnsyncedToSync(12)
-            }
-            mirror1.write {
-                unsynced.map {it.copy(Unit,isSynced = true)}.forEach {mirror1.markAsSynced(it.pk)}
-            }
-
             // merge into master
             master.write {
-                master.merge(unsynced.toSet(),masterId,mirror1Id)
+                mirror1.write {
+                    mirror1.push(master,mirror1Id,masterId)
+                }
             }
 
-            // pull from master into mirror1 & mirror2
+            // pull from master into mirror2
             master.read {
                 mirror2.write {
-                    mirror2.synchronizeWith(master,mirror2Id,masterId)
+                    mirror2.pull(master,mirror2Id,masterId)
                 }
             }
         }
@@ -73,10 +68,12 @@ class SimpleMirrorRepoTest
         // check records are in all repos
         run {
             check(mirror2Adapter.records.keys.containsAll(pks.map {it.copy(Unit,nodePk = mirror1Id)}))
-            check(mirror2Adapter.records.values.all {it.isSynced})
+            check(mirror2Adapter.records.values.all {it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED})
+            check(mirror1Adapter.records.values.all {it.syncStatus == DeltaRepo.Item.SyncStatus.PUSHED})
             check(mirror2Adapter.records.values.all {!it.isDeleted})
+            check(mirror1Adapter.records.values.all {!it.isDeleted})
             check(mirror2Adapter.records.values.all {it.updateStamp != null})
-            check(mirror2Adapter.records.values.all {it.deleteStamp != null})
+            check(mirror1Adapter.records.values.all {it.updateStamp != null})
         }
 
         // delete records from mirror2
@@ -89,26 +86,20 @@ class SimpleMirrorRepoTest
 
         // sync records to master & mirror1
         run {
-            // get unsynced from mirror and mark as synced
-            val unsynced = mirror2.read {
-                mirror2.selectNextUnsyncedToSync(12)
-            }
-            mirror2.write {
-                unsynced.map {it.copy(Unit,isSynced = true)}.forEach {mirror2.markAsSynced(it.pk)}
-            }
-
             // merge into master
             master.write {
-                master.merge(unsynced.toSet(),masterId,mirror1Id)
+                mirror2.write {
+                    mirror2.push(master,mirror2Id,masterId)
+                }
             }
 
             // pull from master into mirror1 & mirror2
             master.read {
                 mirror1.write {
-                    mirror1.synchronizeWith(master,mirror1Id,masterId)
+                    mirror1.pull(master,mirror1Id,masterId)
                 }
                 mirror2.write {
-                    mirror2.synchronizeWith(master,mirror2Id,masterId)
+                    mirror2.pull(master,mirror2Id,masterId)
                 }
             }
         }
@@ -134,46 +125,49 @@ class SimpleMirrorRepoTest
         run {
             val item = item1
             testSubject.write {
-                testSubject.insertOrReplace(item)
+                testSubject.insertOrReplace(listOf(item))
             }
             val inserted = testSubject.read {
                 testSubject.selectByPk(item.pk)
                     ?: throw RuntimeException("insert failed")
             }
-            check(inserted.copy(isSynced = item.isSynced) == item)
-            check(!inserted.isSynced)
+            check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
+            check(inserted.updateStamp == null)
+            check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
         }
 
         run {
             val item = item2
             testSubject.write {
-                testSubject.insertOrReplace(item)
+                testSubject.insertOrReplace(listOf(item))
             }
             val inserted = testSubject.read {
                 testSubject.selectByPk(item.pk)
                     ?: throw RuntimeException("insert failed")
             }
-            check(inserted.copy(isSynced = item.isSynced) == item)
-            check(!inserted.isSynced)
+            check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
+            check(inserted.updateStamp == null)
+            check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
         }
 
         run {
             val item = item3
             testSubject.write {
-                testSubject.insertOrReplace(item)
+                testSubject.insertOrReplace(listOf(item))
             }
             val inserted = testSubject.read {
                 testSubject.selectByPk(item.pk)
                     ?: throw RuntimeException("insert failed")
             }
-            check(inserted.copy(isSynced = item.isSynced) == item)
-            check(!inserted.isSynced)
+            check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
+            check(inserted.updateStamp == null)
+            check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
         }
 
         run {
             val item = item4
             testSubject.write {
-                testSubject.insertOrReplace(item)
+                testSubject.insertOrReplace(listOf(item))
             }
             testSubject.read {
                 check(testSubject.selectByPk(item.pk) == null)
@@ -183,7 +177,7 @@ class SimpleMirrorRepoTest
         run {
             val item = item5
             testSubject.write {
-                testSubject.insertOrReplace(item)
+                testSubject.insertOrReplace(listOf(item))
             }
             testSubject.read {
                 check(testSubject.selectByPk(item.pk) == null)
@@ -193,14 +187,15 @@ class SimpleMirrorRepoTest
         run {
             val item = item6
             testSubject.write {
-                testSubject.insertOrReplace(item)
+                testSubject.insertOrReplace(listOf(item))
             }
             val inserted = testSubject.read {
                 testSubject.selectByPk(item.pk)
                     ?: throw RuntimeException("insert failed")
             }
-            check(inserted.copy(isSynced = item.isSynced) == item)
-            check(!inserted.isSynced)
+            check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
+            check(inserted.updateStamp == null)
+            check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
         }
     }
 
@@ -210,27 +205,28 @@ class SimpleMirrorRepoTest
         run {
             val item = item2
             testSubject.write {
-                testSubject.insertOrReplace(item)
+                testSubject.insertOrReplace(listOf(item))
             }
             val inserted = testSubject.read {
                 testSubject.selectByPk(item.pk)
                     ?: throw RuntimeException("insert failed")
             }
-            check(inserted.copy(isSynced = item.isSynced) == item)
-            check(!inserted.isSynced)
+            check(inserted.copy(syncStatus = item.syncStatus) == item)
+            check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
+            check(!inserted.isDeleted)
         }
 
         run {
-            val item = item2.copy(deleteStamp = 100)
+            val item = item2.copy(isDeleted = true)
             testSubject.write {
-                testSubject.insertOrReplace(item)
+                testSubject.insertOrReplace(listOf(item))
             }
             val inserted = testSubject.read {
-                testSubject.selectByPk(item.pk)
-                    ?: throw RuntimeException("insert failed")
+                testSubjectAdapter.records[item.pk] ?: throw RuntimeException("insert failed")
             }
-            check(inserted.copy(isSynced = item.isSynced) == item)
-            check(!inserted.isSynced)
+            check(inserted.copy(syncStatus = item.syncStatus) == item)
+            check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
+            check(inserted.isDeleted)
         }
     }
 
@@ -240,12 +236,13 @@ class SimpleMirrorRepoTest
         // cannot page for deleted records
         // insert records that will be deleted
         testSubject.write {
-            testSubject.insertOrReplace(item1.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item2.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item3.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item4.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item5.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
-            testSubject.insertOrReplace(item6.copy(updateStamp = null,deleteStamp = null,isDeleted = false))
+            testSubject.insertOrReplace(listOf(
+                item1.copy(Unit,updateStamp = null,isDeleted = false),
+                item2.copy(Unit,updateStamp = null,isDeleted = false),
+                item3.copy(Unit,updateStamp = null,isDeleted = false),
+                item4.copy(Unit,updateStamp = null,isDeleted = false),
+                item5.copy(Unit,updateStamp = null,isDeleted = false),
+                item6.copy(Unit,updateStamp = null,isDeleted = false)))
         }
 
         // check state of test subject
@@ -353,52 +350,27 @@ class SimpleMirrorRepoTest
     {
         prepareTestSubjectForPageTests()
 
-        testSubject.read {
-            // -.->..
-            check(testSubject.pageByUpdateStamp(Long.MIN_VALUE,Order.ASC,1).map {it.pk} == listOf(item4.pk))
-            // -.-.-.->
-            check(testSubject.pageByUpdateStamp(Long.MIN_VALUE,Order.ASC,10).map {it.pk} == listOf(item4.pk,item5.pk,item6.pk))
-            // ..-.->
-            check(testSubject.pageByUpdateStamp(5,Order.ASC,10).map {it.pk} == listOf(item6.pk))
-            check(testSubject.pageByUpdateStamp(5,Order.ASC,1).map {it.pk} == listOf(item6.pk))
-            // ...->
-            check(testSubject.pageByUpdateStamp(6,Order.ASC,10).isEmpty())
-            // ..<-.-
-            check(testSubject.pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).map {it.pk} == listOf(item6.pk))
-            // <-.-.-.-
-            check(testSubject.pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,10).map {it.pk} == listOf(item6.pk,item5.pk,item4.pk))
-            // <-.-..
-            check(testSubject.pageByUpdateStamp(2,Order.DESC,10).map {it.pk} == listOf(item4.pk))
-            check(testSubject.pageByUpdateStamp(3,Order.DESC,10).map {it.pk} == listOf(item4.pk))
-            // <-...
-            check(testSubject.pageByUpdateStamp(0,Order.DESC,10).isEmpty())
-        }
-    }
-
-    @Test
-    fun pageByDeleteStampTest()
-    {
-        prepareTestSubjectForPageTests()
+        val allStatus = DeltaRepo.Item.SyncStatus.values().toSet()
 
         testSubject.read {
             // -.->..
-            check(testSubject.pageByDeleteStamp(Long.MIN_VALUE,Order.ASC,1).map {it.pk} == listOf(item4.pk))
+            check(testSubject.pageByUpdateStamp(Long.MIN_VALUE,Order.ASC,1,allStatus).map {it.pk} == listOf(item4.pk))
             // -.-.-.->
-            check(testSubject.pageByDeleteStamp(Long.MIN_VALUE,Order.ASC,10).map {it.pk} == listOf(item4.pk,item6.pk,item5.pk))
+            check(testSubject.pageByUpdateStamp(Long.MIN_VALUE,Order.ASC,10,allStatus).map {it.pk} == listOf(item4.pk,item5.pk,item6.pk))
             // ..-.->
-            check(testSubject.pageByDeleteStamp(5,Order.ASC,10).map {it.pk} == listOf(item5.pk))
-            check(testSubject.pageByDeleteStamp(5,Order.ASC,1).map {it.pk} == listOf(item5.pk))
+            check(testSubject.pageByUpdateStamp(5,Order.ASC,10,allStatus).map {it.pk} == listOf(item6.pk))
+            check(testSubject.pageByUpdateStamp(5,Order.ASC,1,allStatus).map {it.pk} == listOf(item6.pk))
             // ...->
-            check(testSubject.pageByDeleteStamp(6,Order.ASC,10).isEmpty())
+            check(testSubject.pageByUpdateStamp(6,Order.ASC,10,allStatus).isEmpty())
             // ..<-.-
-            check(testSubject.pageByDeleteStamp(Long.MAX_VALUE,Order.DESC,1).map {it.pk} == listOf(item5.pk))
+            check(testSubject.pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,1,allStatus).map {it.pk} == listOf(item6.pk))
             // <-.-.-.-
-            check(testSubject.pageByDeleteStamp(Long.MAX_VALUE,Order.DESC,10).map {it.pk} == listOf(item5.pk,item6.pk,item4.pk))
+            check(testSubject.pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,10,allStatus).map {it.pk} == listOf(item6.pk,item5.pk,item4.pk))
             // <-.-..
-            check(testSubject.pageByDeleteStamp(2,Order.DESC,10).map {it.pk} == listOf(item4.pk))
-            check(testSubject.pageByDeleteStamp(3,Order.DESC,10).map {it.pk} == listOf(item4.pk))
+            check(testSubject.pageByUpdateStamp(2,Order.DESC,10,allStatus).map {it.pk} == listOf(item4.pk))
+            check(testSubject.pageByUpdateStamp(3,Order.DESC,10,allStatus).map {it.pk} == listOf(item4.pk))
             // <-...
-            check(testSubject.pageByDeleteStamp(0,Order.DESC,10).isEmpty())
+            check(testSubject.pageByUpdateStamp(0,Order.DESC,10,allStatus).isEmpty())
         }
     }
 
@@ -421,12 +393,12 @@ class SimpleMirrorRepoTest
             val selected = testSubject.selectNextUnsyncedToSync(10).associate {it.pk to it}
 
             // regular unsynced items should be here
-            check(selected[item1.pk] == item1.copy(isSynced = false))
-            check(selected[item2.pk] == item2.copy(isSynced = false))
-            check(selected[item3.pk] == item3.copy(isSynced = false))
+            check(selected[item1.pk] == item1.copy(syncStatus = DeltaRepo.Item.SyncStatus.DIRTY))
+            check(selected[item2.pk] == item2.copy(syncStatus = DeltaRepo.Item.SyncStatus.DIRTY))
+            check(selected[item3.pk] == item3.copy(syncStatus = DeltaRepo.Item.SyncStatus.DIRTY))
 
             // even deleted items should be selected here
-            check(selected[item5.pk] == item5.copy(isSynced = false))
+            check(selected[item5.pk] == item5.copy(syncStatus = DeltaRepo.Item.SyncStatus.DIRTY))
 
             // this item is marked as synced and should not be here
             check(selected[item4.pk] == null)

@@ -2,17 +2,37 @@ package com.github.ericytsang.lib.deltarepo
 
 class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(private val adapter:MirrorRepoAdapter<ItemPk,Item>):BaseRepo(),MutableMirrorRepo<ItemPk,Item>
 {
-    override fun synchronizeWith(source:MasterRepo<ItemPk,Item>,localRepoInterRepoId:DeltaRepoPk,remoteRepoInterRepoId:DeltaRepoPk)
+    override fun push(remote:Pushable<ItemPk,Item>,localRepoInterRepoId:DeltaRepoPk,remoteRepoInterRepoId:DeltaRepoPk)
     {
         checkCanWrite()
 
-        // synchronize updates
+        // push updates
         run {
             do
             {
-                val maxUpdateStampItem = pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).singleOrNull()
+                val toPush = adapter.selectNextUnsyncedToSync(DeltaRepo.BATCH_SIZE)
+                val pushed = remote.insertOrReplace(toPush,remoteRepoInterRepoId,localRepoInterRepoId)
+                    .asSequence()
+                    .map {it.copy(Unit,syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
+                    .localized(localRepoInterRepoId,remoteRepoInterRepoId)
+                    .toList()
+                pushed.forEach {adapter.insertOrReplace(it)}
+            }
+            while (toPush.isNotEmpty())
+        }
+    }
+
+    override fun pull(remote:Pullable<ItemPk,Item>,localRepoInterRepoId:DeltaRepoPk,remoteRepoInterRepoId:DeltaRepoPk)
+    {
+        checkCanWrite()
+
+        // pull updates
+        run {
+            do
+            {
+                val maxUpdateStampItem = pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,1,setOf(DeltaRepo.Item.SyncStatus.PULLED)).singleOrNull()
                 val maxUpdateStamp = maxUpdateStampItem?.updateStamp ?: Long.MIN_VALUE
-                val newUpdates = source.pageByUpdateStamp(maxUpdateStamp,Order.ASC,DeltaRepo.BATCH_SIZE)
+                val newUpdates = remote.pageByUpdateStamp(maxUpdateStamp,Order.ASC,DeltaRepo.BATCH_SIZE,setOf(DeltaRepo.Item.SyncStatus.PULLED))
                     .asSequence()
                     .localized(localRepoInterRepoId,remoteRepoInterRepoId)
                     .filter {it.pk != maxUpdateStampItem?.pk}
@@ -22,51 +42,39 @@ class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<Item
             while (newUpdates.isNotEmpty())
         }
 
-        // synchronize delete stamps
-        run {
-            do
-            {
-                val maxDeleteStampItem = pageByDeleteStamp(Long.MAX_VALUE,Order.DESC,1).singleOrNull()
-                val maxDeleteStamp = maxDeleteStampItem?.deleteStamp ?: Long.MIN_VALUE
-                val newUpdates = source.pageByDeleteStamp(maxDeleteStamp,Order.ASC,DeltaRepo.BATCH_SIZE)
-                    .asSequence()
-                    .localized(localRepoInterRepoId,remoteRepoInterRepoId)
-                    .filter {it.pk != maxDeleteStampItem?.pk}
-                    .toList()
-                newUpdates.forEach {adapter.insertOrReplace(it)}
-            }
-            while (newUpdates.isNotEmpty())
-        }
-
         // delete items whose delete stamps are less than source's minimum
         run {
-            val minDeleteStampItem = source.pageByDeleteStamp(Long.MIN_VALUE,Order.ASC,1)
+            val minDeleteStampItem = remote.pageByUpdateStamp(Long.MIN_VALUE,Order.ASC,1,setOf(DeltaRepo.Item.SyncStatus.PULLED))
                 .asSequence()
                 .localized(localRepoInterRepoId,remoteRepoInterRepoId)
                 .singleOrNull()
-            val minDeleteStamp = minDeleteStampItem?.deleteStamp ?: Long.MAX_VALUE
+            val minDeleteStamp = minDeleteStampItem?.updateStamp ?: Long.MAX_VALUE
             adapter.delete(minDeleteStamp)
         }
     }
 
-    override fun insertOrReplace(item:Item)
+    override fun insertOrReplace(items:Iterable<Item>,localRepoInterRepoId:DeltaRepoPk,remoteRepoInterRepoId:DeltaRepoPk):Set<Item>
     {
         checkCanWrite()
-        adapter.insertOrReplace(item.copy(Unit,isSynced = false))
-    }
-
-    override fun markAsSynced(pk:ItemPk)
-    {
-        checkCanWrite()
-        val item = adapter.selectByPk(pk) ?: return
-        adapter.insertOrReplace(item.copy(Unit,isSynced = true))
+        val itemsToInsert = items
+            .asSequence()
+            .localized(localRepoInterRepoId,remoteRepoInterRepoId)
+            .map {
+                val existing = adapter.selectByPk(it.pk)
+                it.copy(Unit,
+                    syncStatus = DeltaRepo.Item.SyncStatus.DIRTY,
+                    updateStamp = existing?.updateStamp)
+            }
+            .toSet()
+        itemsToInsert.forEach {adapter.insertOrReplace(it)}
+        return itemsToInsert
     }
 
     override fun deleteByPk(pk:ItemPk)
     {
         checkCanWrite()
         val item = selectByPk(pk) ?: return
-        insertOrReplace(item.copy(Unit,isDeleted = true))
+        insertOrReplace(listOf(item.copy(Unit,isDeleted = true)))
     }
 
     override fun computeNextPk():ItemPk
@@ -81,16 +89,10 @@ class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<Item
         return adapter.selectByPk(pk)
     }
 
-    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,syncStatus:Set<DeltaRepo.Item.SyncStatus>):List<Item>
     {
         checkCanRead()
-        return adapter.pageByUpdateStamp(start,order,limit)
-    }
-
-    override fun pageByDeleteStamp(start:Long,order:Order,limit:Int):List<Item>
-    {
-        checkCanRead()
-        return adapter.pageByDeleteStamp(start,order,limit)
+        return adapter.pageByUpdateStamp(start,order,limit,syncStatus)
     }
 
     override fun selectNextUnsyncedToSync(limit:Int):List<Item>
