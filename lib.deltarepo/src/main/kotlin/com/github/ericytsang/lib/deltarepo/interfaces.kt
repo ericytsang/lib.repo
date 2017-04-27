@@ -55,9 +55,9 @@ interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,
     override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,syncStatus:Set<DeltaRepo.Item.SyncStatus>):List<Item>
 }
 
-// mutable delta repo
+// master & mirror repo adapters
 
-interface MutableDeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:DeltaRepo<ItemPk,Item>
+interface BaseRepoAdapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:DeltaRepo<ItemPk,Item>
 {
     /**
      * inserts [item] into the repo. replaces any existing record with the same
@@ -76,6 +76,23 @@ interface MutableDeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<
     fun computeNextPk():ItemPk
 }
 
+interface MasterRepoAdapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:BaseRepoAdapter<ItemPk,Item>
+{
+    /**
+     * returns the next unused update stamp.
+     */
+    fun computeNextUpdateStamp():Long
+}
+
+interface MirrorRepoAdapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:BaseRepoAdapter<ItemPk,Item>
+{
+    /**
+     * selects the next [limit] [DeltaRepo.Item]s to sync to the [MasterRepo].
+     * [DeltaRepo.Item.syncStatus] == [DeltaRepo.Item.SyncStatus.DIRTY]
+     */
+    fun selectNextUnsyncedToSync(limit:Int):List<Item>
+}
+
 // read-only master & mirror repos
 
 interface MasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:DeltaRepo<ItemPk,Item>
@@ -88,18 +105,6 @@ interface MirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk
      */
     fun selectNextUnsyncedToSync(limit:Int):List<Item>
 }
-
-// master & mirror repo adapters
-
-interface MasterRepoAdapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:MutableDeltaRepo<ItemPk,Item>,MasterRepo<ItemPk,Item>
-{
-    /**
-     * returns the next unused update stamp.
-     */
-    fun computeNextUpdateStamp():Long
-}
-
-interface MirrorRepoAdapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:MutableDeltaRepo<ItemPk,Item>,MirrorRepo<ItemPk,Item>
 
 // mutable master & mirror repos
 
