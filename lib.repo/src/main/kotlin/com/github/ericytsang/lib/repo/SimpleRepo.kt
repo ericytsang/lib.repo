@@ -1,12 +1,11 @@
-package com.github.ericytsang.lib.deltarepo
+package com.github.ericytsang.lib.repo
 
-import com.github.ericytsang.lib.repo.Repo
 import java.util.Collections
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
-open class BaseRepo:Repo
+open class SimpleRepo:Repo
 {
     private val readWriteLock = ReentrantReadWriteLock()
 

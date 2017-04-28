@@ -6,7 +6,8 @@ data class MockItem(
     override val pk:Pk,
     override val updateStamp:Long?,
     override val syncStatus:DeltaRepo.Item.SyncStatus,
-    override val isDeleted:Boolean)
+    override val isDeleted:Boolean,
+    val string:String)
     :DeltaRepo.Item<MockItem.Pk,MockItem>
 {
     data class Pk(

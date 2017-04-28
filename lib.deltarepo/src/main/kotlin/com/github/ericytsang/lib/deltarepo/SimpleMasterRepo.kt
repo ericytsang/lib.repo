@@ -1,75 +1,170 @@
 package com.github.ericytsang.lib.deltarepo
 
-class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(private val adapter:MasterRepoAdapter<ItemPk,Item>):BaseRepo(),MutableMasterRepo<ItemPk,Item>
+import com.github.ericytsang.lib.repo.Repo
+import com.github.ericytsang.lib.repo.SimpleRepo
+
+open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(private val adapter:Adapter<ItemPk,Item>):SimpleRepo(),MasterRepo<ItemPk,Item>
 {
-    override fun insertOrReplace(items:Iterable<Item>,localRepoInterRepoId:DeltaRepoPk,remoteRepoInterRepoId:DeltaRepoPk):Set<Item>
+    interface Adapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo,Pusher.Remote<ItemPk,Item>,Puller.Remote<ItemPk,Item>
+    {
+        /**
+         * size of batch to use when doing incremental operations.
+         */
+        val BATCH_SIZE:Int
+
+        /**
+         * specifies the maximum number of deleted entries to keep so [SimpleMirrorRepo]s
+         * can have a chance to sync up. if a [SimpleMirrorRepo] is out of sync for so
+         * long so that it fails to sync deletes, it will have to execute a more
+         * intensive routine to get back in sync with the master.
+         */
+        val MAX_DELETED_ITEMS_TO_RETAIN:Long
+
+        /**
+         * persistent, mutable integer initialized to 0. used by context to count
+         * the number of records that are deleted by [deleteByPk].
+         */
+        var deleteCount:Int
+
+        fun pageByUpdateStamp(start:Long,order:Order,limit:Int,syncStatus:Set<DeltaRepo.Item.SyncStatus>,isDeleted:Boolean?):List<Item>
+
+        /**
+         * returns the [Item] whose [DeltaRepo.Item.pk] == [pk]; null if not exists.
+         */
+        fun selectByPk(pk:ItemPk):Item?
+
+        /**
+         * returns the next unused update stamp.
+         */
+        fun computeNextUpdateStamp():Long
+
+        /**
+         * takes care of merging updates from mirrors into the master repo.
+         */
+        fun merge(local:Item,remote:Item):Item
+
+        /**
+         * delete all where [DeltaRepo.Item.pk] in [pks].
+         */
+        fun deleteByPk(pks:Set<ItemPk>)
+
+        /**
+         * returns the next unused primary key.
+         */
+        fun computeNextPk():ItemPk
+    }
+
+    override val pushTarget = object:Pusher.Remote<ItemPk,Item>
+    {
+        override fun insertOrReplace(items:Iterable<Item>):HashSet<Item>
+        {
+            checkCanWrite()
+            return adapter.insertOrReplace(items)
+        }
+    }
+
+    override val pullTarget = object:Puller.Remote<ItemPk,Item>
+    {
+        override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):Puller.Remote.Result<ItemPk,Item>
+        {
+            checkCanRead()
+            return adapter.pageByUpdateStamp(start,order,limit)
+        }
+    }
+
+    /**
+     * inserts [items] into the repo. replaces any existing record with
+     * conflicting [DeltaRepo.Item.pk].
+     *
+     * may be used by [SimpleMirrorRepo]s to merge new records into the [SimpleMasterRepo].
+     *
+     * if [DeltaRepo.Item.isDeleted] == false, then the record is deleted.
+     *
+     * automatically sets:
+     * - [DeltaRepo.Item.syncStatus] = [DeltaRepo.Item.SyncStatus.PULLED]
+     * - [DeltaRepo.Item.updateStamp] = [MasterRepoAdapter.computeNextUpdateStamp]
+     */
+    override fun insertOrReplace(items:Iterable<Item>):Set<Item>
     {
         checkCanWrite()
-
         val (toDelete,toInsert) = items
             .asSequence()
-            .localized(localRepoInterRepoId,remoteRepoInterRepoId)
             .map {it.copy(Unit,syncStatus = DeltaRepo.Item.SyncStatus.PULLED)}
+            .map {
+                update ->
+                val existing = adapter.selectByPk(update.pk)
+                if (existing != null) adapter.merge(existing,update) else update
+            }
+            .map {check(it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED);it}
             .partition {it.isDeleted}
         val _toInsert = toInsert
             .toSet()
             .asSequence()
-            .map {it.copy(Unit,updateStamp = adapter.computeNextUpdateStamp())}
+            .map {it.copy(
+                Unit,
+                updateStamp = adapter.computeNextUpdateStamp())}
             .toList()
-        _toInsert.forEach {
-                adapter.insertOrReplace(it)
-            }
+        adapter.insertOrReplace(_toInsert)
         deleteByPk(toDelete.map {it.pk}.toSet())
-        return (toDelete+_toInsert).toSet()
+        return (toDelete+_toInsert).toHashSet()
     }
 
+    /**
+     * delete all where [DeltaRepo.Item.pk] in [pks].
+     */
     override fun deleteByPk(pks:Set<ItemPk>)
     {
         checkCanWrite()
+        // sets the isDeleted flag of entries whose pk are in pks
         val recordsToDelete = pks
             .mapNotNull {adapter.selectByPk(it)}
             .asSequence()
-        val maxUpsateStampToDelete = recordsToDelete
-            .map {it.updateStamp ?: throw RuntimeException("master repo should not have null for this field")}
-            .max() ?: return
-        var pageStart = maxUpsateStampToDelete
+        recordsToDelete
+            .map {it.copy(
+                Unit,
+                updateStamp = adapter.computeNextUpdateStamp(),
+                isDeleted = true)}
+            .let {adapter.insertOrReplace(it.asIterable())}
 
-        // update all where deleteStamp < maxDeleteStamp AND pk NOT IN pks
+        // delete oldest items whose isDeleted flag is set from db until only n
+        // items in the db with the isDeleted flag set
+        var numDeletedItemsToRetainCount = adapter.MAX_DELETED_ITEMS_TO_RETAIN
+        var start = Long.MAX_VALUE
         do
         {
-            // query for records and prepare for next query
-            val records = pageByUpdateStamp(pageStart,Order.DESC,DeltaRepo.BATCH_SIZE,setOf(DeltaRepo.Item.SyncStatus.PULLED))
-                .filter {it.updateStamp != pageStart}
-            records.mapNotNull {it.updateStamp}.min()?.let {pageStart = it}
+            val items = adapter
+                .pageByUpdateStamp(start,Order.DESC,adapter.BATCH_SIZE,setOf(DeltaRepo.Item.SyncStatus.PULLED),true)
+                .filter {it.updateStamp != start}
+            start = items.lastOrNull()?.updateStamp ?: break
 
-            // update all where updateStamp < maxUpdateStamp AND pk NOT IN pks
-            records.filter {it.pk !in pks}.forEach {
-                adapter.insertOrReplace(it.copy(Unit,updateStamp = adapter.computeNextUpdateStamp()))
+            val numItemsToRetain = Math.min(numDeletedItemsToRetainCount,items.size.toLong()).toInt()
+            numDeletedItemsToRetainCount = Math.max(numDeletedItemsToRetainCount-numItemsToRetain,0)
+            val itemsToDelete = items.drop(numItemsToRetain).map {it.pk}.toSet()
+            if (itemsToDelete.isNotEmpty())
+            {
+                adapter.deleteByPk(itemsToDelete)
+                adapter.deleteCount += itemsToDelete.size
             }
         }
-        while(records.isNotEmpty())
-
-        // delete records...
-        val minDeleteStampToKeep = pageByUpdateStamp(maxUpsateStampToDelete,Order.ASC,2,setOf(DeltaRepo.Item.SyncStatus.PULLED))
-            .drop(1).singleOrNull()?.updateStamp ?: Long.MAX_VALUE
-        adapter.delete(minDeleteStampToKeep)
+        while (true)
     }
 
+    /**
+     * returns the next unused primary key.
+     */
     override fun computeNextPk():ItemPk
     {
         checkCanWrite()
         return adapter.computeNextPk()
     }
 
-    override fun selectByPk(pk:ItemPk):Item?
+    override fun <R> read(block:()->R):R
     {
-        checkCanRead()
-        return adapter.selectByPk(pk)
+        return super.read {adapter.read(block)}
     }
 
-    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,syncStatus:Set<DeltaRepo.Item.SyncStatus>):List<Item>
+    override fun <R> write(block:()->R):R
     {
-        checkCanRead()
-        return adapter.pageByUpdateStamp(start,order,limit,syncStatus)
+        return super.write {adapter.write(block)}
     }
 }
