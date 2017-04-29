@@ -70,4 +70,9 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
     {
         return records.values.filter {it.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY}.take(limit)
     }
+
+    override fun deleteAllPushed()
+    {
+        records.values.removeAll {it.syncStatus == DeltaRepo.Item.SyncStatus.PUSHED}
+    }
 }

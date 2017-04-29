@@ -58,6 +58,12 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
          * where [DeltaRepo.Item.syncStatus] == [DeltaRepo.Item.SyncStatus.PULLED]
          */
         fun setAllPulledToPushed()
+
+        /**
+         * delete all where
+         * [DeltaRepo.Item.syncStatus] == [DeltaRepo.Item.SyncStatus.PUSHED].
+         */
+        fun deleteAllPushed()
     }
 
     private fun _pull(remote:Remote<ItemPk,Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Int
@@ -140,6 +146,9 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
 
             // pull updates
             adapter.deleteCount = _pull(remote,localRepoInterRepoId,remoteRepoInterRepoId)
+
+            // delete all pushed records (they did not exist on the master)
+            adapter.deleteAllPushed()
         }
     }
 }

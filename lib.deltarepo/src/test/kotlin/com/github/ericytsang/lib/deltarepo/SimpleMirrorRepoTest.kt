@@ -90,7 +90,7 @@ class SimpleMirrorRepoTest
             }
         }
 
-        // sync records to master & mirror1
+        // sync mirror2 records to master & mirrors
         run {
             // merge into master
             master.write {
@@ -110,7 +110,7 @@ class SimpleMirrorRepoTest
             }
         }
 
-        // check records are deleted in all repos
+        // check records are deleted in all repos and merging is as expected
         mirror1.read {
             check(mirror1Adapter.selectByPk(pks[5]) == null)
             check(mirror1Adapter.selectByPk(pks[6]) == null)
@@ -128,7 +128,7 @@ class SimpleMirrorRepoTest
             check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id))?.string == "pks[7]pee")
         }
 
-        // sync records to master & mirror1
+        // sync mirror1 records to master & mirrors
         run {
             // merge into master
             master.write {
@@ -148,7 +148,7 @@ class SimpleMirrorRepoTest
             }
         }
 
-        // check records are deleted in all repos
+        // check that merging is as expected
         mirror1.read {
             check(mirror1Adapter.selectByPk(pks[5]) == null)
             check(mirror1Adapter.selectByPk(pks[6]) == null)
@@ -167,6 +167,57 @@ class SimpleMirrorRepoTest
             {
                 mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id))?.string!!
             }
+        }
+
+        // delete more records from mirror2 such that mirror1 will need to resync
+        run {
+            mirror2.write {
+                mirror2.deleteByPk(setOf(pks[0].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[1].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[2].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[3].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id)))
+            }
+        }
+
+        // sync mirror2 records to master & mirrors
+        run {
+            // merge into master
+            master.write {
+                mirror2.write {
+                    mirror2.pusher.push(master.pushTarget,mirror2Id,masterId)
+                }
+            }
+
+            // pull from master into mirror1 & mirror2
+            master.read {
+                mirror1.write {
+                    mirror1.puller.pull(master.pullTarget,mirror1Id,masterId)
+                }
+                mirror2.write {
+                    mirror2.puller.pull(master.pullTarget,mirror2Id,masterId)
+                }
+            }
+        }
+
+        // check records are deleted in all repos and merging is as expected
+        mirror1.read {
+            check(mirror1Adapter.selectByPk(pks[0]) == null)
+            check(mirror1Adapter.selectByPk(pks[1]) == null)
+            check(mirror1Adapter.selectByPk(pks[2]) == null)
+            check(mirror1Adapter.selectByPk(pks[3]) == null)
+        }
+        master.read {
+            // up to 3 (number is defined by adapter) deleted records are kept on master repo
+            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id)) == null)
+            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id))?.isDeleted == true)
+        }
+        mirror2.read {
+            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk.Companion,nodePk = mirror1Id)) == null)
         }
     }
 
