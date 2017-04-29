@@ -79,10 +79,10 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
             remoteDeleteCount = deleteCount
             val (toDelete,toInsert) = items
                 .asSequence()
-                // localize updates
-                .localized(localRepoInterRepoId,remoteRepoInterRepoId)
                 // only process the new updates
                 .filter {it.updateStamp!! > maxUpdateStamp}
+                // localize updates
+                .localized(localRepoInterRepoId,remoteRepoInterRepoId)
                 // lookup the existing item...
                 .map {adapter.selectByPk(it.pk) to it}
                 // ignore redundant deletes
