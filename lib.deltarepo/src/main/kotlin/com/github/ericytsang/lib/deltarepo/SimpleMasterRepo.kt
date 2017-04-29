@@ -3,9 +3,9 @@ package com.github.ericytsang.lib.deltarepo
 import com.github.ericytsang.lib.repo.Repo
 import com.github.ericytsang.lib.repo.SimpleRepo
 
-open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(private val adapter:Adapter<ItemPk,Item>):SimpleRepo(),MasterRepo<ItemPk,Item>
+open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(protected val adapter:Adapter<ItemPk,Item>):SimpleRepo(),MasterRepo<ItemPk,Item>
 {
-    interface Adapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo,Pusher.Remote<ItemPk,Item>,Puller.Remote<ItemPk,Item>
+    interface Adapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo
     {
         /**
          * size of batch to use when doing incremental operations.
@@ -27,6 +27,12 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         var deleteCount:Int
 
         fun pageByUpdateStamp(start:Long,order:Order,limit:Int,syncStatus:Set<DeltaRepo.Item.SyncStatus>,isDeleted:Boolean?):List<Item>
+
+        /**
+         * inserts all [items] into the repo and replaces any records with
+         * conflicting [DeltaRepo.Item.pk].
+         */
+        fun insertOrReplace(items:Iterable<Item>)
 
         /**
          * returns the [Item] whose [DeltaRepo.Item.pk] == [pk]; null if not exists.
@@ -59,7 +65,7 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         override fun insertOrReplace(items:Iterable<Item>):HashSet<Item>
         {
             checkCanWrite()
-            return adapter.insertOrReplace(items)
+            return this@SimpleMasterRepo.insertOrReplace(items)
         }
     }
 
@@ -68,7 +74,9 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):Puller.Remote.Result<ItemPk,Item>
         {
             checkCanRead()
-            return adapter.pageByUpdateStamp(start,order,limit)
+            return Puller.Remote.Result(
+                adapter.pageByUpdateStamp(start,order,limit,DeltaRepo.Item.SyncStatus.values().toSet(),null),
+                adapter.deleteCount)
         }
     }
 
@@ -84,12 +92,12 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
      * - [DeltaRepo.Item.syncStatus] = [DeltaRepo.Item.SyncStatus.PULLED]
      * - [DeltaRepo.Item.updateStamp] = [MasterRepoAdapter.computeNextUpdateStamp]
      */
-    override fun insertOrReplace(items:Iterable<Item>):Set<Item>
+    override fun insertOrReplace(items:Iterable<Item>):HashSet<Item>
     {
         checkCanWrite()
         val (toDelete,toInsert) = items
             .asSequence()
-            .map {it.copy(Unit,syncStatus = DeltaRepo.Item.SyncStatus.PULLED)}
+            .map {it.copy(DeltaRepo.Item.Companion,syncStatus = DeltaRepo.Item.SyncStatus.PULLED)}
             .map {
                 update ->
                 val existing = adapter.selectByPk(update.pk)
@@ -101,7 +109,7 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
             .toSet()
             .asSequence()
             .map {it.copy(
-                Unit,
+                DeltaRepo.Item.Companion,
                 updateStamp = adapter.computeNextUpdateStamp())}
             .toList()
         adapter.insertOrReplace(_toInsert)
@@ -116,14 +124,21 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
     {
         checkCanWrite()
         // sets the isDeleted flag of entries whose pk are in pks
-        val recordsToDelete = pks
+        pks
             .mapNotNull {adapter.selectByPk(it)}
             .asSequence()
-        recordsToDelete
-            .map {it.copy(
-                Unit,
-                updateStamp = adapter.computeNextUpdateStamp(),
-                isDeleted = true)}
+            .filter {!it.isDeleted}
+            .map {
+
+                // increment delete count
+                adapter.deleteCount += 1
+
+                // set deleted flag
+                it.copy(
+                    DeltaRepo.Item.Companion,
+                    updateStamp = adapter.computeNextUpdateStamp(),
+                    isDeleted = true)
+            }
             .let {adapter.insertOrReplace(it.asIterable())}
 
         // delete oldest items whose isDeleted flag is set from db until only n
@@ -143,7 +158,6 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
             if (itemsToDelete.isNotEmpty())
             {
                 adapter.deleteByPk(itemsToDelete)
-                adapter.deleteCount += itemsToDelete.size
             }
         }
         while (true)

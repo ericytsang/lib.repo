@@ -16,30 +16,26 @@ fun <T:Comparable<T>> Order.isAfterOrEqual(curr:T,next:T):Boolean
 
 // read-only delta repo
 
-data class DeltaRepoPk(override val id:Long):DeltaRepo.Pk
-
-data class RepoItemPk(override val id:Long):Repo.Item.Pk
-
 interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo
 {
     companion object
     {
-        val LOCAL_NODE_ID:DeltaRepoPk = DeltaRepoPk(-1)
+        val LOCAL_NODE_ID:RepoPk = RepoPk(-1)
     }
-    interface Pk:Serializable
-    {
-        val id:Long
-    }
+    data class RepoPk(val id:Long):Serializable
+    data class ItemPk(val id:Long):Serializable
     interface Item<Pk:DeltaRepo.Item.Pk<Pk>,SubClass:DeltaRepo.Item<Pk,SubClass>>
     {
+        companion object;
         interface Pk<SubClass:DeltaRepo.Item.Pk<SubClass>>
         {
-            val nodePk:DeltaRepo.Pk
-            val pk:Repo.Item.Pk
+            companion object;
+            val repoPk:DeltaRepo.RepoPk
+            val itemPk:DeltaRepo.ItemPk
             fun copy(
-                unit:Unit,
-                nodePk:DeltaRepo.Pk = this.nodePk,
-                pk:Repo.Item.Pk = this.pk)
+                unused:Companion,
+                nodePk:DeltaRepo.RepoPk = this.repoPk,
+                itemPk:DeltaRepo.ItemPk = this.itemPk)
                 :SubClass
         }
         val pk:Pk
@@ -48,7 +44,7 @@ interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,
         val isDeleted:Boolean
         enum class SyncStatus {DIRTY,PUSHED,PULLED}
         fun copy(
-            unit:Unit,
+            unused:Companion,
             pk:Pk = this.pk,
             updateStamp:Long? = this.updateStamp,
             syncStatus:SyncStatus = this.syncStatus,
@@ -73,14 +69,14 @@ interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,
     fun computeNextPk():ItemPk
 }
 
-internal fun <ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>> Sequence<Item>.localized(localRepoInterRepoId:DeltaRepo.Pk,remoteRepoInterRepoId:DeltaRepo.Pk):Sequence<Item>
+internal fun <ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>> Sequence<Item>.localized(localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Sequence<Item>
 {
     return this
         // convert remote-relative addresses to absolute addresses
         .map {
-            if (it.pk.nodePk == DeltaRepo.LOCAL_NODE_ID)
+            if (it.pk.repoPk == DeltaRepo.LOCAL_NODE_ID)
             {
-                it.copy(Unit,pk = it.pk.copy(Unit,nodePk = remoteRepoInterRepoId))
+                it.copy(DeltaRepo.Item.Companion,pk = it.pk.copy(DeltaRepo.Item.Pk.Companion,nodePk = remoteRepoInterRepoId))
             }
             else
             {
@@ -89,9 +85,9 @@ internal fun <ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>
         }
         // convert absolute addresses to local-relative addresses
         .map {
-            if (it.pk.nodePk == localRepoInterRepoId)
+            if (it.pk.repoPk == localRepoInterRepoId)
             {
-                it.copy(Unit,pk = it.pk.copy(Unit,nodePk = DeltaRepo.LOCAL_NODE_ID))
+                it.copy(DeltaRepo.Item.Companion,pk = it.pk.copy(DeltaRepo.Item.Pk.Companion,nodePk = DeltaRepo.LOCAL_NODE_ID))
             }
             else
             {

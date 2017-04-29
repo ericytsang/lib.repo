@@ -3,7 +3,7 @@ package com.github.ericytsang.lib.deltarepo
 import com.github.ericytsang.lib.repo.Repo
 import com.github.ericytsang.lib.repo.SimpleRepo
 
-open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(private val adapter:Adapter<ItemPk,Item>):SimpleRepo(),MirrorRepo<ItemPk,Item>
+open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(protected val adapter:Adapter<ItemPk,Item>):SimpleRepo(),MirrorRepo<ItemPk,Item>
 {
     interface Adapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo,Pusher.Adapter<ItemPk,Item>,Puller.Adapter<ItemPk,Item>
     {
@@ -90,7 +90,8 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
             .asSequence()
             .map {
                 val existing = adapter.selectByPk(it.pk)
-                it.copy(Unit,
+                it.copy(
+                    DeltaRepo.Item.Companion,
                     syncStatus = DeltaRepo.Item.SyncStatus.DIRTY,
                     updateStamp = existing?.updateStamp)
             }
@@ -109,7 +110,9 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         checkCanWrite()
         val items = pks
             .mapNotNull {adapter.selectByPk(it)}
-            .map {it.copy(Unit,isDeleted = true)}
+            .filter {!it.isDeleted}
+            .map {it.copy(DeltaRepo.Item.Companion,isDeleted = true)}
+        adapter.deleteCount += items.size
         insertOrReplace(items)
     }
 

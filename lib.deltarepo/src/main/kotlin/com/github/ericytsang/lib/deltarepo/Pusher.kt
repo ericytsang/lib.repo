@@ -31,7 +31,7 @@ class Pusher<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
         fun insertOrReplace(item:Item)
     }
 
-    fun push(remote:Remote<ItemPk,Item>,localRepoInterRepoId:DeltaRepo.Pk,remoteRepoInterRepoId:DeltaRepo.Pk)
+    fun push(remote:Remote<ItemPk,Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk)
     {
         // push updates
         do
@@ -42,7 +42,7 @@ class Pusher<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
                 .toList()
             val pushed = remote.insertOrReplace(toPush)
                 .asSequence()
-                .map {it.copy(Unit,syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
+                .map {it.copy(DeltaRepo.Item.Companion,syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
                 .localized(localRepoInterRepoId,remoteRepoInterRepoId)
                 .toList()
             pushed.forEach {adapter.insertOrReplace(it)}

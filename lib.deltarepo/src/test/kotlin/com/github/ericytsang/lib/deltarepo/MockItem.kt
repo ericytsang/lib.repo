@@ -1,7 +1,5 @@
 package com.github.ericytsang.lib.deltarepo
 
-import com.github.ericytsang.lib.repo.Repo
-
 data class MockItem(
     override val pk:Pk,
     override val updateStamp:Long?,
@@ -11,21 +9,21 @@ data class MockItem(
     :DeltaRepo.Item<MockItem.Pk,MockItem>
 {
     data class Pk(
-        override val nodePk:DeltaRepo.Pk,
-        override val pk:Repo.Item.Pk)
+        override val repoPk:DeltaRepo.RepoPk,
+        override val itemPk:DeltaRepo.ItemPk)
         :DeltaRepo.Item.Pk<Pk>
     {
         override fun copy(
-            unit:Unit,
-            nodePk:DeltaRepo.Pk,
-            pk:Repo.Item.Pk)
+            unused:DeltaRepo.Item.Pk.Companion,
+            nodePk:DeltaRepo.RepoPk,
+            itemPk:DeltaRepo.ItemPk)
             :Pk
         {
-            return copy(nodePk,pk)
+            return copy(nodePk,itemPk)
         }
     }
     override fun copy(
-        unit:Unit,
+        unused:DeltaRepo.Item.Companion,
         pk:Pk,
         updateStamp:Long?,
         syncStatus:DeltaRepo.Item.SyncStatus,

@@ -32,8 +32,7 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
         /**
          * selects the first [limit] records where [DeltaRepo.Item.updateStamp] is
          * equal to or after [start] when records are sorted in [order] order.
-         * [DeltaRepo.Item.syncStatus] == [DeltaRepo.Item.SyncStatus.PULLED] and
-         * [DeltaRepo.Item.isDeleted] == false.
+         * [DeltaRepo.Item.syncStatus] == [DeltaRepo.Item.SyncStatus.PULLED]
          */
         fun pageByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
 
@@ -61,7 +60,7 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
         fun setAllPulledToPushed()
     }
 
-    private fun _pull(remote:Remote<ItemPk,Item>,localRepoInterRepoId:DeltaRepo.Pk,remoteRepoInterRepoId:DeltaRepo.Pk):Int
+    private fun _pull(remote:Remote<ItemPk,Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Int
     {
         var remoteDeleteCount:Int
 
@@ -74,30 +73,61 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
             remoteDeleteCount = deleteCount
             val (toDelete,toInsert) = items
                 .asSequence()
+                // localize updates
                 .localized(localRepoInterRepoId,remoteRepoInterRepoId)
-                .filter {it.pk != maxUpdateStampItem?.pk}
+                // only process the new updates
+                .filter {it.updateStamp!! > maxUpdateStamp}
+                // lookup the existing item...
+                .map {adapter.selectByPk(it.pk) to it}
+                // ignore redundant deletes
+                .filter {
+                    (existing,update) ->
+                    !update.isDeleted || (update.isDeleted && existing?.isDeleted == false)
+                }
+                // merge if needed
                 .map {
-                    update ->
-                    val existing = adapter.selectByPk(update.pk)
+                    (existing,update) ->
                     when (existing?.syncStatus)
                     {
-                        DeltaRepo.Item.SyncStatus.DIRTY -> adapter.merge(existing,update)
+                        DeltaRepo.Item.SyncStatus.DIRTY ->
+                        {
+                            if (existing.updateStamp!! == update.updateStamp!!)
+                            {
+                                existing
+                            }
+                            else
+                            {
+                                adapter.merge(existing,update).copy(
+                                    DeltaRepo.Item.Companion,
+                                    updateStamp = update.updateStamp!!,
+                                    syncStatus = DeltaRepo.Item.SyncStatus.DIRTY)
+                            }
+                        }
                         DeltaRepo.Item.SyncStatus.PUSHED,
                         DeltaRepo.Item.SyncStatus.PULLED,
                         null -> update
                     }
                 }
                 .partition {it.isDeleted}
+
+            // insert items
             toInsert.forEach {adapter.insertOrReplace(it)}
-            adapter.deleteByPk(toDelete.map {it.pk}.toSet())
-            adapter.deleteCount += toDelete.size
+
+            // delete items and do book keeping
+            toDelete
+                .map {it.pk}
+                .toSet()
+                .let {
+                    adapter.deleteByPk(it)
+                    adapter.deleteCount += it.size
+                }
         }
         while (toInsert.size+toDelete.size >= adapter.BATCH_SIZE)
 
         return remoteDeleteCount
     }
 
-    fun pull(remote:Remote<ItemPk,Item>,localRepoInterRepoId:DeltaRepo.Pk,remoteRepoInterRepoId:DeltaRepo.Pk)
+    fun pull(remote:Remote<ItemPk,Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk)
     {
         // pull data
         val remoteDeleteCount = _pull(remote,localRepoInterRepoId,remoteRepoInterRepoId)
