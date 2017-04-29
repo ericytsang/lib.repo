@@ -108,12 +108,12 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
                 .asSequence()
                 // only process the new updates
                 .filter {it.updateStamp!! > maxUpdateStamp}
+                // count the number of records deleted on master
+                .map {if (it.isDeleted) adapter.deleteCount++;it}
                 // localize updates
                 .localized(localRepoInterRepoId,remoteRepoInterRepoId)
                 // lookup the existing item...
                 .map {adapter.selectByPk(it.pk) to it}
-                // ignore redundant deletes
-                .filter {(existing,update) -> !update.isDeleted || (update.isDeleted && existing?.isDeleted == false)}
                 // merge...
                 .map {(existing,update) -> merge(existing,update)}
                 // partition...
@@ -123,13 +123,7 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
             toInsert.forEach {adapter.insertOrReplace(it)}
 
             // delete items and do book keeping
-            toDelete
-                .map {it.pk}
-                .toSet()
-                .let {
-                    adapter.deleteByPk(it)
-                    adapter.deleteCount += it.size
-                }
+            adapter.deleteByPk(toDelete.map {it.pk}.toSet())
         }
         while (toInsert.size+toDelete.size >= adapter.BATCH_SIZE)
 
