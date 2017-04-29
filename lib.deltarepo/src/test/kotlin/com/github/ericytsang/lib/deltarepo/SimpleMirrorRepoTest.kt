@@ -65,7 +65,7 @@ class SimpleMirrorRepoTest
                 testSubject.insertOrReplace(listOf(item))
             }
             testSubject.read {
-                check(testSubjectAdapter.selectByPk(item.pk) == null)
+                check(testSubjectAdapter.selectByPk(item.pk)?.isDeleted == true)
             }
         }
 
@@ -75,7 +75,7 @@ class SimpleMirrorRepoTest
                 testSubject.insertOrReplace(listOf(item))
             }
             testSubject.read {
-                check(testSubjectAdapter.selectByPk(item.pk) == null)
+                check(testSubjectAdapter.selectByPk(item.pk)?.isDeleted == true)
             }
         }
 
@@ -158,7 +158,7 @@ class SimpleMirrorRepoTest
         // check state of test subject
         testSubject.read {
             check(testSubjectAdapter.selectByPk(item1.pk) != null)
-            check(testSubjectAdapter.selectByPk(item2.pk) == null)
+            check(testSubjectAdapter.selectByPk(item2.pk)?.isDeleted == true)
             check(testSubjectAdapter.selectByPk(item3.pk) != null)
             check(testSubjectAdapter.selectByPk(item4.pk) != null)
             check(testSubjectAdapter.selectByPk(item5.pk) != null)
@@ -175,10 +175,10 @@ class SimpleMirrorRepoTest
         // check state of test subject
         testSubject.read {
             check(testSubjectAdapter.selectByPk(item1.pk) != null)
-            check(testSubjectAdapter.selectByPk(item2.pk) == null)
-            check(testSubjectAdapter.selectByPk(item3.pk) == null)
-            check(testSubjectAdapter.selectByPk(item4.pk) == null)
-            check(testSubjectAdapter.selectByPk(item5.pk) == null)
+            check(testSubjectAdapter.selectByPk(item2.pk)?.isDeleted == true)
+            check(testSubjectAdapter.selectByPk(item3.pk)?.isDeleted == true)
+            check(testSubjectAdapter.selectByPk(item4.pk)?.isDeleted == true)
+            check(testSubjectAdapter.selectByPk(item5.pk)?.isDeleted == true)
             check(testSubjectAdapter.selectByPk(item6.pk) != null)
         }
 
@@ -191,10 +191,10 @@ class SimpleMirrorRepoTest
         // check state of test subject
         testSubject.read {
             check(testSubjectAdapter.selectByPk(item1.pk) != null)
-            check(testSubjectAdapter.selectByPk(item2.pk) == null)
-            check(testSubjectAdapter.selectByPk(item3.pk) == null)
-            check(testSubjectAdapter.selectByPk(item4.pk) == null)
-            check(testSubjectAdapter.selectByPk(item5.pk) == null)
+            check(testSubjectAdapter.selectByPk(item2.pk)?.isDeleted == true)
+            check(testSubjectAdapter.selectByPk(item3.pk)?.isDeleted == true)
+            check(testSubjectAdapter.selectByPk(item4.pk)?.isDeleted == true)
+            check(testSubjectAdapter.selectByPk(item5.pk)?.isDeleted == true)
             check(testSubjectAdapter.selectByPk(item6.pk) != null)
         }
     }

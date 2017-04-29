@@ -20,7 +20,7 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
 
     override fun selectByPk(pk:MockItem.Pk):MockItem?
     {
-        return records[pk]?.takeIf {!it.isDeleted}
+        return records[pk]
     }
 
     override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):List<MockItem>

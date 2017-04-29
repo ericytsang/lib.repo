@@ -112,7 +112,6 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
             .mapNotNull {adapter.selectByPk(it)}
             .filter {!it.isDeleted}
             .map {it.copy(DeltaRepo.Item.Companion,isDeleted = true)}
-        adapter.deleteCount += items.size
         insertOrReplace(items)
     }
 

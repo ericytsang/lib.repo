@@ -66,6 +66,33 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
         fun deleteAllPushed()
     }
 
+    private fun merge(old:Item?,new:Item):Item
+    {
+        if (old == null) return new
+        check(old.pk == new.pk)
+        check(old.updateStamp!! <= new.updateStamp!!)
+        return when (old.syncStatus)
+        {
+            DeltaRepo.Item.SyncStatus.PUSHED,
+            DeltaRepo.Item.SyncStatus.PULLED -> new
+            DeltaRepo.Item.SyncStatus.DIRTY ->
+            {
+                if (old.updateStamp!! == new.updateStamp!!)
+                {
+                    old
+                }
+                else
+                {
+                    adapter.merge(old,new).copy(
+                        DeltaRepo.Item.Companion,
+                        pk = new.pk,
+                        updateStamp = new.updateStamp!!,
+                        syncStatus = DeltaRepo.Item.SyncStatus.DIRTY)
+                }
+            }
+        }
+    }
+
     private fun _pull(remote:Remote<ItemPk,Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Int
     {
         var remoteDeleteCount:Int
@@ -86,35 +113,11 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
                 // lookup the existing item...
                 .map {adapter.selectByPk(it.pk) to it}
                 // ignore redundant deletes
-                .filter {
-                    (existing,update) ->
-                    !update.isDeleted || (update.isDeleted && existing?.isDeleted == false)
-                }
-                // merge if needed
-                .map {
-                    (existing,update) ->
-                    when (existing?.syncStatus)
-                    {
-                        DeltaRepo.Item.SyncStatus.DIRTY ->
-                        {
-                            if (existing.updateStamp!! == update.updateStamp!!)
-                            {
-                                existing
-                            }
-                            else
-                            {
-                                adapter.merge(existing,update).copy(
-                                    DeltaRepo.Item.Companion,
-                                    updateStamp = update.updateStamp!!,
-                                    syncStatus = DeltaRepo.Item.SyncStatus.DIRTY)
-                            }
-                        }
-                        DeltaRepo.Item.SyncStatus.PUSHED,
-                        DeltaRepo.Item.SyncStatus.PULLED,
-                        null -> update
-                    }
-                }
-                .partition {it.isDeleted}
+                .filter {(existing,update) -> !update.isDeleted || (update.isDeleted && existing?.isDeleted == false)}
+                // merge...
+                .map {(existing,update) -> merge(existing,update)}
+                // partition...
+                .partition {it.isDeleted && it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED}
 
             // insert items
             toInsert.forEach {adapter.insertOrReplace(it)}

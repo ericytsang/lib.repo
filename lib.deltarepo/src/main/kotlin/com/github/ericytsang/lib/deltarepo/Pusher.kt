@@ -19,6 +19,12 @@ class Pusher<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
         val BATCH_SIZE:Int
 
         /**
+         * persistent, mutable integer initialized to 0. used by context to count
+         * the number of records that are deleted by the [MasterRepo].
+         */
+        var deleteCount:Int
+
+        /**
          * selects the next [limit] [DeltaRepo.Item]s to sync to the [SimpleMasterRepo].
          * [DeltaRepo.Item.syncStatus] == [DeltaRepo.Item.SyncStatus.DIRTY]
          */
@@ -45,7 +51,10 @@ class Pusher<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
                 .map {it.copy(DeltaRepo.Item.Companion,syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
                 .localized(localRepoInterRepoId,remoteRepoInterRepoId)
                 .toList()
-            pushed.forEach {adapter.insertOrReplace(it)}
+            pushed.forEach {
+                adapter.insertOrReplace(it)
+                if (it.isDeleted) adapter.deleteCount++
+            }
         }
         while (toPush.isNotEmpty())
     }
