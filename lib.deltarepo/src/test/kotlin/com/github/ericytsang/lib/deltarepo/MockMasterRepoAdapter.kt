@@ -25,14 +25,13 @@ class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem.Pk,MockItem>
         return records[pk]
     }
 
-    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,syncStatus:Set<DeltaRepo.Item.SyncStatus>,isDeleted:Boolean?):List<MockItem>
+    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<MockItem>
     {
         return records.values
             .filter {it.updateStamp != null}
             .sortedBy {it.updateStamp}
             .filter {order.isAfterOrEqual(start,it.updateStamp!!)}
             .filter {isDeleted == null || it.isDeleted == isDeleted}
-            .filter {it.syncStatus in syncStatus}
             .let {if (order == Order.DESC) it.asReversed() else it}
             .take(limit)
     }

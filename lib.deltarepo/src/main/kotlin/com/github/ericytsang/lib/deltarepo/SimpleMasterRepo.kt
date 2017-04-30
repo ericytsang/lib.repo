@@ -26,7 +26,7 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
          */
         var deleteCount:Int
 
-        fun pageByUpdateStamp(start:Long,order:Order,limit:Int,syncStatus:Set<DeltaRepo.Item.SyncStatus>,isDeleted:Boolean?):List<Item>
+        fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
 
         /**
          * inserts all [items] into the repo and replaces any records with
@@ -75,7 +75,7 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         {
             checkCanRead()
             return Puller.Remote.Result(
-                adapter.pageByUpdateStamp(start,order,limit,DeltaRepo.Item.SyncStatus.values().toSet(),null),
+                adapter.pageByUpdateStamp(start,order,limit,null),
                 adapter.deleteCount)
         }
     }
@@ -148,7 +148,7 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         do
         {
             val items = adapter
-                .pageByUpdateStamp(start,Order.DESC,adapter.BATCH_SIZE,setOf(DeltaRepo.Item.SyncStatus.PULLED),true)
+                .pageByUpdateStamp(start,Order.DESC,adapter.BATCH_SIZE,true)
                 .filter {it.updateStamp != start}
             start = items.lastOrNull()?.updateStamp ?: break
 
