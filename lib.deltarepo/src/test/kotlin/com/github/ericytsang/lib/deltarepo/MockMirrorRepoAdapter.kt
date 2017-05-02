@@ -23,7 +23,7 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
         return records[pk]
     }
 
-    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):List<MockItem>
+    override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<MockItem>
     {
         return records.values
             .asSequence()

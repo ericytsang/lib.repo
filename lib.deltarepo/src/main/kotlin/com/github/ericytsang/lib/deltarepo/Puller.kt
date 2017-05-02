@@ -34,7 +34,7 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
          * equal to or after [start] when records are sorted in [order] order.
          * [DeltaRepo.Item.syncStatus] == [DeltaRepo.Item.SyncStatus.PULLED]
          */
-        fun pageByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+        fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
 
         /**
          * takes care of merging [pulledRemoteItem] into [dirtyLocalItem].
@@ -100,7 +100,7 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
         // pull updates
         do
         {
-            val maxUpdateStampItem = adapter.pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).singleOrNull()
+            val maxUpdateStampItem = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).singleOrNull()
             val maxUpdateStamp = maxUpdateStampItem?.updateStamp ?: Long.MIN_VALUE
             val (items,deleteCount) = remote.pageByUpdateStamp(maxUpdateStamp,Order.ASC,adapter.BATCH_SIZE)
             remoteDeleteCount = deleteCount

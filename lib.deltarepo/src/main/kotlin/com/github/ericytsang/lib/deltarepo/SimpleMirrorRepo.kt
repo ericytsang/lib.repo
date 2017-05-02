@@ -48,10 +48,10 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
             return adapter.selectByPk(pk)
         }
 
-        override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+        override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
         {
             checkCanRead()
-            return adapter.pageByUpdateStamp(start,order,limit)
+            return adapter.pagePulledByUpdateStamp(start,order,limit)
         }
 
         override fun insertOrReplace(item:Item)
