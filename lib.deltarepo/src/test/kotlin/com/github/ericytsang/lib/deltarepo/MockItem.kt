@@ -15,11 +15,11 @@ data class MockItem(
     {
         override fun copy(
             unused:DeltaRepo.Item.Pk.Companion,
-            nodePk:DeltaRepo.RepoPk,
+            repoPk:DeltaRepo.RepoPk,
             itemPk:DeltaRepo.ItemPk)
             :Pk
         {
-            return copy(nodePk,itemPk)
+            return copy(repoPk,itemPk)
         }
     }
     override fun copy(

@@ -34,7 +34,7 @@ interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,
             val itemPk:DeltaRepo.ItemPk
             fun copy(
                 unused:Companion,
-                nodePk:DeltaRepo.RepoPk = this.repoPk,
+                repoPk:DeltaRepo.RepoPk = this.repoPk,
                 itemPk:DeltaRepo.ItemPk = this.itemPk)
                 :SubClass
         }
@@ -76,7 +76,7 @@ internal fun <ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>
         .map {
             if (it.pk.repoPk == DeltaRepo.LOCAL_NODE_ID)
             {
-                it.copy(DeltaRepo.Item.Companion,pk = it.pk.copy(DeltaRepo.Item.Pk.Companion,nodePk = remoteRepoInterRepoId))
+                it.copy(DeltaRepo.Item.Companion,pk = it.pk.copy(DeltaRepo.Item.Pk.Companion,repoPk = remoteRepoInterRepoId))
             }
             else
             {
@@ -87,7 +87,7 @@ internal fun <ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>
         .map {
             if (it.pk.repoPk == localRepoInterRepoId)
             {
-                it.copy(DeltaRepo.Item.Companion,pk = it.pk.copy(DeltaRepo.Item.Pk.Companion,nodePk = DeltaRepo.LOCAL_NODE_ID))
+                it.copy(DeltaRepo.Item.Companion,pk = it.pk.copy(DeltaRepo.Item.Pk.Companion,repoPk = DeltaRepo.LOCAL_NODE_ID))
             }
             else
             {
