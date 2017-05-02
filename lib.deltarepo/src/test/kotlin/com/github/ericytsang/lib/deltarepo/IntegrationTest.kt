@@ -74,7 +74,7 @@ class IntegrationTest
 
         // check records are in all repos
         run {
-            check(mirror2Adapter.records.keys.containsAll(pks.map {it.copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)}))
+            check(mirror2Adapter.records.keys.containsAll(pks.map {it.copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)}))
             check(mirror2Adapter.records.values.all {it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED})
             check(mirror1Adapter.records.values.all {it.syncStatus == DeltaRepo.Item.SyncStatus.PUSHED})
             check(mirror2Adapter.records.values.all {!it.isDeleted})
@@ -94,8 +94,8 @@ class IntegrationTest
         // delete records from mirror2 & insert record into mirror1
         run {
             mirror2.write {
-                mirror2.deleteByPk(setOf(pks[5].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[6].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[5].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[6].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
             }
         }
 
@@ -126,12 +126,12 @@ class IntegrationTest
         }
         master.read {
             // up to 3 (number is defined by adapter) deleted records are kept on master repo
-            check(masterAdapter.selectByPk(pks[5].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[6].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[5].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[6].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
         }
         mirror2.read {
-            check(mirror2Adapter.selectByPk(pks[5].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[6].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[5].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[6].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
         }
         check(!hasMirror1ReSynced)
         check(!hasMirror2ReSynced)
@@ -145,10 +145,10 @@ class IntegrationTest
         // delete more records from mirror2 such that mirror1 will need to resync
         run {
             mirror2.write {
-                mirror2.deleteByPk(setOf(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
             }
         }
 
@@ -181,16 +181,16 @@ class IntegrationTest
         }
         master.read {
             // up to 3 (number is defined by adapter) deleted records are kept on master repo
-            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
         }
         mirror2.read {
-            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
         }
         check(hasMirror1ReSynced)
         check(hasMirror2ReSynced)
@@ -204,7 +204,7 @@ class IntegrationTest
         // delete records from mirror2 & insert record into mirror1
         run {
             mirror2.write {
-                val item = mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))!!
+                val item = mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))!!
                 mirror2.insertOrReplace(setOf(item.copy(string = "pee")))
             }
         }
@@ -234,10 +234,10 @@ class IntegrationTest
             check(mirror1Adapter.selectByPk(pks[7])?.string == "pks[7]pee")
         }
         master.read {
-            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]pee")
+            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]pee")
         }
         mirror2.read {
-            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]pee")
+            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]pee")
         }
         check(!hasMirror1ReSynced)
         check(!hasMirror2ReSynced)
@@ -251,7 +251,7 @@ class IntegrationTest
         // delete records from mirror2 & insert record into mirror1
         run {
             mirror2.write {
-                val item = mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))!!
+                val item = mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))!!
                 mirror2.insertOrReplace(setOf(item.copy(string = "pee")))
             }
             mirror1.write {
@@ -285,10 +285,10 @@ class IntegrationTest
             check(mirror1Adapter.selectByPk(pks[7])?.string == "poopks[7]pee")
         }
         master.read {
-            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]pee")
+            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]pee")
         }
         mirror2.read {
-            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]pee")
+            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]pee")
         }
         check(!hasMirror1ReSynced)
         check(!hasMirror2ReSynced)
@@ -318,10 +318,10 @@ class IntegrationTest
             check(mirror1Adapter.selectByPk(pks[7])?.string == "pks[7]peepoopks[7]pee") {mirror1Adapter.selectByPk(pks[7])?.string!!}
         }
         master.read {
-            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]peepoopks[7]pee")
+            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]peepoopks[7]pee")
         }
         mirror2.read {
-            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]peepoopks[7]pee")
+            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]peepoopks[7]pee")
         }
         check(!hasMirror1ReSynced)
         check(!hasMirror2ReSynced)
@@ -335,10 +335,10 @@ class IntegrationTest
         // delete more records from mirror2 such that mirror1 will need to resync
         run {
             mirror2.write {
-                mirror2.deleteByPk(setOf(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
             }
             mirror1.write {
                 val item = mirror1Adapter.selectByPk(pks[7])!!
@@ -376,18 +376,18 @@ class IntegrationTest
         }
         master.read {
             // up to 3 (number is defined by adapter) deleted records are kept on master repo
-            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]")
+            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]")
         }
         mirror2.read {
-            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]")
+            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]")
         }
         check(hasMirror1ReSynced)
         check(hasMirror2ReSynced)
@@ -422,18 +422,18 @@ class IntegrationTest
         }
         master.read {
             // up to 3 (number is defined by adapter) deleted records are kept on master repo
-            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]poo")
+            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]poo")
         }
         mirror2.read {
-            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.string == "pks[7]poo")
+            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.string == "pks[7]poo")
         }
     }
 
@@ -445,10 +445,10 @@ class IntegrationTest
         // delete more records from mirror2 such that mirror1 will need to resync
         run {
             mirror2.write {
-                mirror2.deleteByPk(setOf(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
-                mirror2.deleteByPk(setOf(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
+                mirror2.deleteByPk(setOf(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)))
             }
             mirror1.write {
                 mirror1.deleteByPk(setOf(pks[7]))
@@ -485,18 +485,18 @@ class IntegrationTest
         }
         master.read {
             // up to 3 (number is defined by adapter) deleted records are kept on master repo
-            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == false)
+            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == false)
         }
         mirror2.read {
-            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == false)
+            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == false)
         }
         check(hasMirror1ReSynced)
         check(hasMirror2ReSynced)
@@ -531,18 +531,18 @@ class IntegrationTest
         }
         master.read {
             // up to 3 (number is defined by adapter) deleted records are kept on master repo
-            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
-            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(masterAdapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(masterAdapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
+            check(masterAdapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id))?.isDeleted == true)
         }
         mirror2.read {
-            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
-            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,nodePk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[0].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[1].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[2].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[3].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
+            check(mirror2Adapter.selectByPk(pks[7].copy(DeltaRepo.Item.Pk,repoPk = mirror1Id)) == null)
         }
     }
 }
