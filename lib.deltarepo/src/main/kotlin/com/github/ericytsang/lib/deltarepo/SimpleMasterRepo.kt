@@ -65,7 +65,14 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         override fun insertOrReplace(items:Iterable<Item>):HashSet<Item>
         {
             checkCanWrite()
-            return this@SimpleMasterRepo.insertOrReplace(items)
+            return this@SimpleMasterRepo.insertOrReplace(items
+                .map {
+                    update ->
+                    val existing = adapter.selectByPk(update.pk)
+                    val merged = if (existing != null) adapter.merge(existing,update) else update
+                    check(merged.pk == update.pk)
+                    merged
+                })
         }
     }
 
@@ -98,12 +105,6 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         val (toDelete,toInsert) = items
             .asSequence()
             .map {it.copy(DeltaRepo.Item.Companion,syncStatus = DeltaRepo.Item.SyncStatus.PULLED)}
-            .map {
-                update ->
-                val existing = adapter.selectByPk(update.pk)
-                if (existing != null) adapter.merge(existing,update) else update
-            }
-            .map {check(it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED);it}
             .partition {it.isDeleted}
         val _toInsert = toInsert
             .toSet()
