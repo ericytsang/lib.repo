@@ -1,77 +1,25 @@
 package com.github.ericytsang.lib.deltarepo
 
-import com.github.ericytsang.lib.repo.Repo
-import com.github.ericytsang.lib.repo.SimpleRepo
-
-open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(_adapter:Adapter<ItemPk,Item>):SimpleRepo(),MirrorRepo<ItemPk,Item>
+open class SimpleMirrorRepo<Item:Any>(private val adapter:Adapter<Item>):MirrorRepo<Item>
 {
-    interface Adapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo
+    interface Adapter<Item:Any>
     {
         val BATCH_SIZE:Int
         var deleteCount:Int
-        fun computeNextPk():ItemPk
+        var nextId:Long
         fun insertOrReplace(item:Item)
+        val Item.metadata:DeltaRepo.Item.Metadata
+        fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
         fun selectDirtyItemsToPush(limit:Int):List<Item>
-        fun deleteByPk(pks:Set<ItemPk>)
-        fun selectByPk(pk:ItemPk):Item?
+        fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
+        fun selectByPk(pk:DeltaRepo.Item.Pk):Item?
         fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
         fun merge(dirtyLocalItem:Item?,pulledRemoteItem:Item):Item
         fun setAllPulledToPushed()
         fun deleteAllPushed()
     }
 
-    private val adapter = object:Adapter<ItemPk,Item> by _adapter
-    {
-        override val BATCH_SIZE:Int get()
-        {
-            checkCanRead()
-            return _adapter.BATCH_SIZE
-        }
-
-        override var deleteCount:Int
-            get()
-            {
-                checkCanRead()
-                return _adapter.deleteCount
-            }
-            set(value)
-            {
-                checkCanWrite()
-                _adapter.deleteCount = value
-            }
-
-        override fun computeNextPk():ItemPk
-        {
-            checkCanWrite()
-            return _adapter.computeNextPk()
-        }
-
-        override fun insertOrReplace(item:Item)
-        {
-            checkCanWrite()
-            _adapter.insertOrReplace(item)
-        }
-
-        override fun selectDirtyItemsToPush(limit:Int):List<Item>
-        {
-            checkCanRead()
-            return _adapter.selectDirtyItemsToPush(limit)
-        }
-
-        override fun deleteByPk(pks:Set<ItemPk>)
-        {
-            checkCanWrite()
-            _adapter.deleteByPk(pks)
-        }
-
-        override fun selectByPk(pk:ItemPk):Item?
-        {
-            checkCanRead()
-            return _adapter.selectByPk(pk)
-        }
-    }
-
-    override val pusher = Pusher(object:Pusher.Adapter<ItemPk,Item>
+    override val pusher = Pusher(object:Pusher.Adapter<Item>
     {
         override val BATCH_SIZE:Int get() = adapter.BATCH_SIZE
 
@@ -84,9 +32,19 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         {
             return adapter.insertOrReplace(item)
         }
+
+        override val Item.metadata:DeltaRepo.Item.Metadata get()
+        {
+            return with(adapter) {metadata}
+        }
+
+        override fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
+        {
+            return with(adapter) {copy(newMetadata)}
+        }
     })
 
-    override val puller = Puller(object:Puller.Adapter<ItemPk,Item>
+    override val puller = Puller(object:Puller.Adapter<Item>
     {
         override val BATCH_SIZE:Int get() = adapter.BATCH_SIZE
 
@@ -94,7 +52,7 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
             get() = adapter.deleteCount
             set(value) { adapter.deleteCount = value }
 
-        override fun selectByPk(pk:ItemPk):Item?
+        override fun selectByPk(pk:DeltaRepo.Item.Pk):Item?
         {
             return adapter.selectByPk(pk)
         }
@@ -114,7 +72,7 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
             return adapter.insertOrReplace(item)
         }
 
-        override fun deleteByPk(pks:Set<ItemPk>)
+        override fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
         {
             adapter.deleteByPk(pks)
         }
@@ -133,7 +91,32 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         {
             return adapter.selectDirtyItemsToPush(1).isNotEmpty()
         }
+
+        override val Item.metadata:DeltaRepo.Item.Metadata get()
+        {
+            return with(adapter) {metadata}
+        }
+
+        override fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
+        {
+            return with(adapter) {copy(newMetadata)}
+        }
     })
+
+    private val Item.metadata:DeltaRepo.Item.Metadata get()
+    {
+        return with(adapter) {metadata}
+    }
+
+    private fun Item.copy(
+        pk:DeltaRepo.Item.Pk = metadata.pk,
+        updateStamp:Long? = metadata.updateStamp,
+        syncStatus:DeltaRepo.Item.SyncStatus = metadata.syncStatus,
+        isDeleted:Boolean = metadata.isDeleted)
+        :Item
+    {
+        return with(adapter) {copy(DeltaRepo.Item.Metadata(pk,updateStamp,syncStatus,isDeleted))}
+    }
 
     /**
      * inserts [items] into the repo. replaces any existing record with the same
@@ -150,15 +133,15 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         val itemsToInsert = items
             .asSequence()
             .map {
-                val existing = adapter.selectByPk(it.pk)
+                val existing = adapter.selectByPk(it.metadata.pk)
                 it.copy(
-                    DeltaRepo.Item.Companion,
                     syncStatus = DeltaRepo.Item.SyncStatus.DIRTY,
-                    updateStamp = existing?.updateStamp)
+                    updateStamp = existing?.metadata?.updateStamp)
             }
         itemsToInsert.forEach {adapter.insertOrReplace(it)}
         return itemsToInsert.toSet()
     }
+
     /**
      * convenience method for [insertOrReplace].
      *
@@ -166,30 +149,20 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
      * - [DeltaRepo.Item.isDeleted] = true
      * where [DeltaRepo.Item.pk] in [pks].
      */
-    fun deleteByPk(pks:Set<ItemPk>)
+    fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
     {
         val items = pks
             .mapNotNull {adapter.selectByPk(it)}
-            .filter {!it.isDeleted}
-            .map {it.copy(DeltaRepo.Item.Companion,isDeleted = true)}
+            .filter {!it.metadata.isDeleted}
+            .map {it.copy(isDeleted = true)}
         insertOrReplace(items)
     }
 
     /**
      * returns the next unused primary key.
      */
-    fun computeNextPk():ItemPk
+    fun computeNextPk():DeltaRepo.Item.Pk
     {
-        return adapter.computeNextPk()
-    }
-
-    override fun <R> read(block:()->R):R
-    {
-        return super.read {adapter.read(block)}
-    }
-
-    override fun <R> write(block:()->R):R
-    {
-        return super.write {adapter.write(block)}
+        return DeltaRepo.Item.Pk(DeltaRepo.LOCAL_NODE_ID,DeltaRepo.ItemPk(adapter.nextId++))
     }
 }

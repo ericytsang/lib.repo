@@ -1,6 +1,6 @@
 package com.github.ericytsang.lib.deltarepo
 
-class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
+class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem>
 {
     val records = mutableMapOf<MockItem.Pk,MockItem>()
 
@@ -8,19 +8,9 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
 
     override var deleteCount:Int = 0
 
-    override fun <R> read(block:()->R):R
+    override fun selectByPk(pk:DeltaRepo.Item.Pk):MockItem?
     {
-        return block()
-    }
-
-    override fun <R> write(block:()->R):R
-    {
-        return block()
-    }
-
-    override fun selectByPk(pk:MockItem.Pk):MockItem?
-    {
-        return records[pk]
+        return records[MockItem.Pk(pk)]
     }
 
     override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<MockItem>
@@ -41,9 +31,9 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
         records[item.pk] = item
     }
 
-    override fun deleteByPk(pks:Set<MockItem.Pk>)
+    override fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
     {
-        records.values.removeAll {it.pk in pks}
+        records.values.removeAll {it.pk.value in pks}
     }
 
     override fun setAllPulledToPushed()
@@ -59,12 +49,7 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
         return if (dirtyLocalItem == null) pulledRemoteItem else pulledRemoteItem.copy(string = dirtyLocalItem.string+pulledRemoteItem.string)
     }
 
-    private var prevId = Long.MIN_VALUE
-
-    override fun computeNextPk():MockItem.Pk
-    {
-        return MockItem.Pk(DeltaRepo.LOCAL_NODE_ID,DeltaRepo.ItemPk(prevId++))
-    }
+    override var nextId = Long.MIN_VALUE
 
     override fun selectDirtyItemsToPush(limit:Int):List<MockItem>
     {
@@ -74,5 +59,15 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
     override fun deleteAllPushed()
     {
         records.values.removeAll {it.syncStatus == DeltaRepo.Item.SyncStatus.PUSHED}
+    }
+
+    override val MockItem.metadata:DeltaRepo.Item.Metadata get()
+    {
+        return metadata(DeltaRepo.Item.Companion)
+    }
+
+    override fun MockItem.copy(newMetadata:DeltaRepo.Item.Metadata):MockItem
+    {
+        return copy(DeltaRepo.Item.Companion,newMetadata.pk,newMetadata.updateStamp,newMetadata.syncStatus,newMetadata.isDeleted)
     }
 }

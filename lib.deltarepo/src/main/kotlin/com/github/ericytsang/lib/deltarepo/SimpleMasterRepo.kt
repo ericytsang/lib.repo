@@ -1,11 +1,8 @@
 package com.github.ericytsang.lib.deltarepo
 
-import com.github.ericytsang.lib.repo.Repo
-import com.github.ericytsang.lib.repo.SimpleRepo
-
-open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(protected val adapter:Adapter<ItemPk,Item>):SimpleRepo(),MasterRepo<ItemPk,Item>
+open class SimpleMasterRepo<Item:Any>(protected val adapter:Adapter<Item>):MasterRepo<Item>
 {
-    interface Adapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo
+    interface Adapter<Item:Any>
     {
         /**
          * size of batch to use when doing incremental operations.
@@ -37,7 +34,7 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         /**
          * returns the [Item] whose [DeltaRepo.Item.pk] == [pk]; null if not exists.
          */
-        fun selectByPk(pk:ItemPk):Item?
+        fun selectByPk(pk:DeltaRepo.Item.Pk):Item?
 
         /**
          * returns the next unused update stamp.
@@ -52,35 +49,47 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         /**
          * delete all where [DeltaRepo.Item.pk] in [pks].
          */
-        fun deleteByPk(pks:Set<ItemPk>)
+        fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
 
-        /**
-         * returns the next unused primary key.
-         */
-        fun computeNextPk():ItemPk
+        val Item.metadata:DeltaRepo.Item.Metadata
+
+        fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
     }
 
-    override val pushTarget = object:Pusher.Remote<ItemPk,Item>
+    private val Item.metadata:DeltaRepo.Item.Metadata get()
+    {
+        return with(adapter) {metadata}
+    }
+
+    private fun Item.copy(
+        pk:DeltaRepo.Item.Pk = metadata.pk,
+        updateStamp:Long? = metadata.updateStamp,
+        syncStatus:DeltaRepo.Item.SyncStatus = metadata.syncStatus,
+        isDeleted:Boolean = metadata.isDeleted)
+        :Item
+    {
+        return with(adapter) {copy(DeltaRepo.Item.Metadata(pk,updateStamp,syncStatus,isDeleted))}
+    }
+
+    override val pushTarget = object:Pusher.Remote<Item>
     {
         override fun insertOrReplace(items:Iterable<Item>)
         {
-            checkCanWrite()
             this@SimpleMasterRepo.insertOrReplace(items
                 .map {
                     update ->
-                    val existing = adapter.selectByPk(update.pk)
+                    val existing = adapter.selectByPk(update.metadata.pk)
                     val merged = adapter.merge(existing,update)
-                    check(merged.pk == update.pk)
+                    check(merged.metadata.pk == update.metadata.pk)
                     merged
                 })
         }
     }
 
-    override val pullTarget = object:Puller.Remote<ItemPk,Item>
+    override val pullTarget = object:Puller.Remote<Item>
     {
-        override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):Puller.Remote.Result<ItemPk,Item>
+        override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):Puller.Remote.Result<Item>
         {
-            checkCanRead()
             return Puller.Remote.Result(
                 adapter.pageByUpdateStamp(start,order,limit,null),
                 adapter.deleteCount)
@@ -101,34 +110,32 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
      */
     private fun insertOrReplace(items:Iterable<Item>):HashSet<Item>
     {
-        checkCanWrite()
         val (toDelete,toInsert) = items
             .asSequence()
-            .map {it.copy(DeltaRepo.Item.Companion,syncStatus = DeltaRepo.Item.SyncStatus.PULLED)}
-            .partition {it.isDeleted}
+            .map {it.copy(
+                syncStatus = DeltaRepo.Item.SyncStatus.PULLED)}
+            .partition {it.metadata.isDeleted}
         val _toInsert = toInsert
             .toSet()
             .asSequence()
             .map {it.copy(
-                DeltaRepo.Item.Companion,
                 updateStamp = adapter.computeNextUpdateStamp())}
             .toList()
         adapter.insertOrReplace(_toInsert)
-        deleteByPk(toDelete.map {it.pk}.toSet())
+        deleteByPk(toDelete.map {it.metadata.pk}.toSet())
         return (toDelete+_toInsert).toHashSet()
     }
 
     /**
      * delete all where [DeltaRepo.Item.pk] in [pks].
      */
-    private fun deleteByPk(pks:Set<ItemPk>)
+    private fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
     {
-        checkCanWrite()
         // sets the isDeleted flag of entries whose pk are in pks
         pks
             .mapNotNull {adapter.selectByPk(it)}
             .asSequence()
-            .filter {!it.isDeleted}
+            .filter {!it.metadata.isDeleted}
             .map {
 
                 // increment delete count
@@ -136,7 +143,6 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
 
                 // set deleted flag
                 it.copy(
-                    DeltaRepo.Item.Companion,
                     updateStamp = adapter.computeNextUpdateStamp(),
                     isDeleted = true)
             }
@@ -150,27 +156,17 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         {
             val items = adapter
                 .pageByUpdateStamp(start,Order.DESC,adapter.BATCH_SIZE,true)
-                .filter {it.updateStamp != start}
-            start = items.lastOrNull()?.updateStamp ?: break
+                .filter {it.metadata.updateStamp != start}
+            start = items.lastOrNull()?.metadata?.updateStamp ?: break
 
             val numItemsToRetain = Math.min(numDeletedItemsToRetainCount,items.size.toLong()).toInt()
             numDeletedItemsToRetainCount = Math.max(numDeletedItemsToRetainCount-numItemsToRetain,0)
-            val itemsToDelete = items.drop(numItemsToRetain).map {it.pk}.toSet()
+            val itemsToDelete = items.drop(numItemsToRetain).map {it.metadata.pk}.toSet()
             if (itemsToDelete.isNotEmpty())
             {
                 adapter.deleteByPk(itemsToDelete)
             }
         }
         while (true)
-    }
-
-    override fun <R> read(block:()->R):R
-    {
-        return super.read {adapter.read(block)}
-    }
-
-    override fun <R> write(block:()->R):R
-    {
-        return super.write {adapter.write(block)}
     }
 }

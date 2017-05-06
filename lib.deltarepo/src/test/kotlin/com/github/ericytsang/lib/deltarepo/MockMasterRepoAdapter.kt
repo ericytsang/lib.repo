@@ -1,6 +1,6 @@
 package com.github.ericytsang.lib.deltarepo
 
-class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem.Pk,MockItem>
+class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem>
 {
     val records = mutableMapOf<MockItem.Pk,MockItem>()
 
@@ -10,19 +10,9 @@ class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem.Pk,MockItem>
 
     override var deleteCount:Int = 0
 
-    override fun <R> read(block:()->R):R
+    override fun selectByPk(pk:DeltaRepo.Item.Pk):MockItem?
     {
-        return block()
-    }
-
-    override fun <R> write(block:()->R):R
-    {
-        return block()
-    }
-
-    override fun selectByPk(pk:MockItem.Pk):MockItem?
-    {
-        return records[pk]
+        return records[MockItem.Pk(pk)]
     }
 
     override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<MockItem>
@@ -46,16 +36,9 @@ class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem.Pk,MockItem>
         return if (local == null) remote else remote.copy(string = local.string+remote.string)
     }
 
-    override fun deleteByPk(pks:Set<MockItem.Pk>)
+    override fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
     {
-        records.values.removeAll {it.pk in pks}
-    }
-
-    private var prevId = Long.MIN_VALUE
-
-    override fun computeNextPk():MockItem.Pk
-    {
-        return MockItem.Pk(DeltaRepo.LOCAL_NODE_ID,DeltaRepo.ItemPk(prevId++))
+        records.values.removeAll {it.pk.value in pks}
     }
 
     private var prevUpdateStamp = 0L//todo Long.MIN_VALUE
@@ -63,5 +46,15 @@ class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem.Pk,MockItem>
     override fun computeNextUpdateStamp():Long
     {
         return prevUpdateStamp++
+    }
+
+    override val MockItem.metadata:DeltaRepo.Item.Metadata get()
+    {
+        return metadata(DeltaRepo.Item.Companion)
+    }
+
+    override fun MockItem.copy(newMetadata:DeltaRepo.Item.Metadata):MockItem
+    {
+        return copy(DeltaRepo.Item.Companion,newMetadata.pk,newMetadata.updateStamp,newMetadata.syncStatus,newMetadata.isDeleted)
     }
 }

@@ -1,6 +1,5 @@
 package com.github.ericytsang.lib.deltarepo
 
-import com.github.ericytsang.lib.repo.Repo
 import java.io.Serializable
 
 enum class Order {ASC,DESC}
@@ -16,7 +15,7 @@ fun <T:Comparable<T>> Order.isAfterOrEqual(curr:T,next:T):Boolean
 
 // read-only delta repo
 
-interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo
+interface DeltaRepo
 {
     companion object
     {
@@ -24,43 +23,36 @@ interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,
     }
     data class RepoPk(val id:Long):Serializable
     data class ItemPk(val id:Long):Serializable
-    interface Item<Pk:DeltaRepo.Item.Pk<Pk>,SubClass:DeltaRepo.Item<Pk,SubClass>>
+    interface Item
     {
         companion object;
-        interface Pk<SubClass:DeltaRepo.Item.Pk<SubClass>>
-        {
-            companion object;
-            val repoPk:DeltaRepo.RepoPk
-            val itemPk:DeltaRepo.ItemPk
-            fun copy(
-                unused:Companion,
-                repoPk:DeltaRepo.RepoPk = this.repoPk,
-                itemPk:DeltaRepo.ItemPk = this.itemPk)
-                :SubClass
-        }
-        val pk:Pk
-        val updateStamp:Long?
-        val syncStatus:SyncStatus
-        val isDeleted:Boolean
+        data class Pk(
+            val repoPk:DeltaRepo.RepoPk,
+            val itemPk:DeltaRepo.ItemPk)
+        data class Metadata(
+            val pk:Pk,
+            val updateStamp:Long?,
+            val syncStatus:SyncStatus,
+            val isDeleted:Boolean)
         enum class SyncStatus {DIRTY,PUSHED,PULLED}
-        fun copy(
-            unused:Companion,
-            pk:Pk = this.pk,
-            updateStamp:Long? = this.updateStamp,
-            syncStatus:SyncStatus = this.syncStatus,
-            isDeleted:Boolean = this.isDeleted)
-            :SubClass
     }
 }
 
-internal fun <ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>> Sequence<Item>.localized(localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Sequence<Item>
+internal interface ItemAdapter<Item:Any>
+{
+    val Item.metadata:DeltaRepo.Item.Metadata
+
+    fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
+}
+
+internal fun <Item:Any> Sequence<Item>.localized(adapter:ItemAdapter<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Sequence<Item>
 {
     return this
         // convert remote-relative addresses to absolute addresses
         .map {
-            if (it.pk.repoPk == DeltaRepo.LOCAL_NODE_ID)
+            if (with(adapter) {it.metadata}.pk.repoPk == DeltaRepo.LOCAL_NODE_ID)
             {
-                it.copy(DeltaRepo.Item.Companion,pk = it.pk.copy(DeltaRepo.Item.Pk.Companion,repoPk = remoteRepoInterRepoId))
+                with(adapter) {it.copy(it.metadata.copy(pk = with(adapter) {it.metadata}.pk.copy(repoPk = remoteRepoInterRepoId)))}
             }
             else
             {
@@ -69,9 +61,9 @@ internal fun <ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>
         }
         // convert absolute addresses to local-relative addresses
         .map {
-            if (it.pk.repoPk == localRepoInterRepoId)
+            if (with(adapter) {it.metadata}.pk.repoPk == localRepoInterRepoId)
             {
-                it.copy(DeltaRepo.Item.Companion,pk = it.pk.copy(DeltaRepo.Item.Pk.Companion,repoPk = DeltaRepo.LOCAL_NODE_ID))
+                with(adapter) {it.copy(it.metadata.copy(pk = with(adapter) {it.metadata}.pk.copy(repoPk = DeltaRepo.LOCAL_NODE_ID)))}
             }
             else
             {
