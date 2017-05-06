@@ -6,7 +6,7 @@ data class MockItem(
     val syncStatus:DeltaRepo.Item.SyncStatus,
     val isDeleted:Boolean,
     val string:String)
-    :DeltaRepo.Item
+    :DeltaRepo.Item<MockItem>
 {
     data class Pk(val value:DeltaRepo.Item.Pk)
     fun copy(
@@ -20,7 +20,12 @@ data class MockItem(
         return copy(Pk(pk),updateStamp,syncStatus,isDeleted)
     }
 
-    fun metadata(unused:DeltaRepo.Item.Companion):DeltaRepo.Item.Metadata
+    override fun copy(newMetadata:DeltaRepo.Item.Metadata):MockItem
+    {
+        return copy(DeltaRepo.Item.Companion,newMetadata.pk,newMetadata.updateStamp,newMetadata.syncStatus,newMetadata.isDeleted)
+    }
+
+    override val metadata:DeltaRepo.Item.Metadata get()
     {
         return DeltaRepo.Item.Metadata(pk.value,updateStamp,syncStatus,isDeleted)
     }

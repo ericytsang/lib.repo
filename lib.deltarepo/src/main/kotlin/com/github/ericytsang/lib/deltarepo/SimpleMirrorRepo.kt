@@ -1,15 +1,13 @@
 package com.github.ericytsang.lib.deltarepo
 
-open class SimpleMirrorRepo<Item:Any>(private val adapter:Adapter<Item>):MirrorRepo<Item>
+open class SimpleMirrorRepo<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>):MirrorRepo<Item>
 {
-    interface Adapter<Item:Any>
+    interface Adapter<Item:DeltaRepo.Item<Item>>
     {
         val BATCH_SIZE:Int
         var deleteCount:Int
         var nextId:Long
         fun insertOrReplace(item:Item)
-        val Item.metadata:DeltaRepo.Item.Metadata
-        fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
         fun selectDirtyItemsToPush(limit:Int):List<Item>
         fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
         fun selectByPk(pk:DeltaRepo.Item.Pk):Item?
@@ -31,16 +29,6 @@ open class SimpleMirrorRepo<Item:Any>(private val adapter:Adapter<Item>):MirrorR
         override fun insertOrReplace(item:Item)
         {
             return adapter.insertOrReplace(item)
-        }
-
-        override val Item.metadata:DeltaRepo.Item.Metadata get()
-        {
-            return with(adapter) {metadata}
-        }
-
-        override fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
-        {
-            return with(adapter) {copy(newMetadata)}
         }
     })
 
@@ -91,32 +79,7 @@ open class SimpleMirrorRepo<Item:Any>(private val adapter:Adapter<Item>):MirrorR
         {
             return adapter.selectDirtyItemsToPush(1).isNotEmpty()
         }
-
-        override val Item.metadata:DeltaRepo.Item.Metadata get()
-        {
-            return with(adapter) {metadata}
-        }
-
-        override fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
-        {
-            return with(adapter) {copy(newMetadata)}
-        }
     })
-
-    private val Item.metadata:DeltaRepo.Item.Metadata get()
-    {
-        return with(adapter) {metadata}
-    }
-
-    private fun Item.copy(
-        pk:DeltaRepo.Item.Pk = metadata.pk,
-        updateStamp:Long? = metadata.updateStamp,
-        syncStatus:DeltaRepo.Item.SyncStatus = metadata.syncStatus,
-        isDeleted:Boolean = metadata.isDeleted)
-        :Item
-    {
-        return with(adapter) {copy(DeltaRepo.Item.Metadata(pk,updateStamp,syncStatus,isDeleted))}
-    }
 
     /**
      * inserts [items] into the repo. replaces any existing record with the same

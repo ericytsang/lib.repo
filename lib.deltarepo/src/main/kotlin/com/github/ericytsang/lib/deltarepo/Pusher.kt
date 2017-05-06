@@ -1,8 +1,8 @@
 package com.github.ericytsang.lib.deltarepo
 
-class Pusher<Item:Any>(private val adapter:Pusher.Adapter<Item>)
+class Pusher<Item:DeltaRepo.Item<Item>>(private val adapter:Pusher.Adapter<Item>)
 {
-    interface Remote<in Item:Any>
+    interface Remote<Item:DeltaRepo.Item<Item>>
     {
         /**
          * takes care of merging [items] into the local database (the database that
@@ -11,7 +11,7 @@ class Pusher<Item:Any>(private val adapter:Pusher.Adapter<Item>)
         fun insertOrReplace(items:Iterable<Item>)
     }
 
-    interface Adapter<Item:Any>
+    interface Adapter<Item:DeltaRepo.Item<Item>>
     {
         /**
          * size of batch to use when doing incremental operations.
@@ -29,38 +29,6 @@ class Pusher<Item:Any>(private val adapter:Pusher.Adapter<Item>)
          * [DeltaRepo.Item.pk].
          */
         fun insertOrReplace(item:Item)
-
-        val Item.metadata:DeltaRepo.Item.Metadata
-
-        fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
-    }
-
-    private val itemAdapter = object:ItemAdapter<Item>
-    {
-        override val Item.metadata:DeltaRepo.Item.Metadata get()
-        {
-            return with(adapter) {metadata}
-        }
-
-        override fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
-        {
-            return with(adapter) {copy(newMetadata)}
-        }
-    }
-
-    val Item.metadata:DeltaRepo.Item.Metadata get()
-    {
-        return with(adapter) {metadata}
-    }
-
-    fun Item.copy(
-        pk:DeltaRepo.Item.Pk = metadata.pk,
-        updateStamp:Long? = metadata.updateStamp,
-        syncStatus:DeltaRepo.Item.SyncStatus = metadata.syncStatus,
-        isDeleted:Boolean = metadata.isDeleted)
-        :Item
-    {
-        return with(adapter) {copy(DeltaRepo.Item.Metadata(pk,updateStamp,syncStatus,isDeleted))}
     }
 
     fun push(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk)
@@ -69,11 +37,10 @@ class Pusher<Item:Any>(private val adapter:Pusher.Adapter<Item>)
         do
         {
             val toPush = adapter.selectDirtyItemsToPush(adapter.BATCH_SIZE)
-                .map {it.copy(
-                    syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
+                .map {it.copy(syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
             remote.insertOrReplace(toPush
                 .asSequence()
-                .localized(itemAdapter,remoteRepoInterRepoId,localRepoInterRepoId)
+                .localized(remoteRepoInterRepoId,localRepoInterRepoId)
                 .toList())
             toPush
                 .forEach {adapter.insertOrReplace(it)}

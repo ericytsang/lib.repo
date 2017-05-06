@@ -1,6 +1,6 @@
 package com.github.ericytsang.lib.deltarepo
 
-interface MirrorRepo<Item:Any>
+interface MirrorRepo<Item:DeltaRepo.Item<Item>>
 {
     val pusher:Pusher<Item>
     val puller:Puller<Item>

@@ -23,7 +23,7 @@ interface DeltaRepo
     }
     data class RepoPk(val id:Long):Serializable
     data class ItemPk(val id:Long):Serializable
-    interface Item
+    interface Item<SubClass:Item<SubClass>>
     {
         companion object;
         data class Pk(
@@ -35,24 +35,29 @@ interface DeltaRepo
             val syncStatus:SyncStatus,
             val isDeleted:Boolean)
         enum class SyncStatus {DIRTY,PUSHED,PULLED}
+        val metadata:Metadata
+        fun copy(newMetadata:Metadata):SubClass
     }
 }
 
-internal interface ItemAdapter<Item:Any>
+internal fun <SubClass:DeltaRepo.Item<SubClass>> SubClass.copy(
+    pk:DeltaRepo.Item.Pk = metadata.pk,
+    updateStamp:Long? = metadata.updateStamp,
+    syncStatus:DeltaRepo.Item.SyncStatus = metadata.syncStatus,
+    isDeleted:Boolean = metadata.isDeleted)
+    :SubClass
 {
-    val Item.metadata:DeltaRepo.Item.Metadata
-
-    fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
+    return copy(DeltaRepo.Item.Metadata(pk,updateStamp,syncStatus,isDeleted))
 }
 
-internal fun <Item:Any> Sequence<Item>.localized(adapter:ItemAdapter<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Sequence<Item>
+internal fun <Item:DeltaRepo.Item<Item>> Sequence<Item>.localized(localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Sequence<Item>
 {
     return this
         // convert remote-relative addresses to absolute addresses
         .map {
-            if (with(adapter) {it.metadata}.pk.repoPk == DeltaRepo.LOCAL_NODE_ID)
+            if (it.metadata.pk.repoPk == DeltaRepo.LOCAL_NODE_ID)
             {
-                with(adapter) {it.copy(it.metadata.copy(pk = with(adapter) {it.metadata}.pk.copy(repoPk = remoteRepoInterRepoId)))}
+                it.copy(pk = it.metadata.pk.copy(repoPk = remoteRepoInterRepoId))
             }
             else
             {
@@ -61,9 +66,9 @@ internal fun <Item:Any> Sequence<Item>.localized(adapter:ItemAdapter<Item>,local
         }
         // convert absolute addresses to local-relative addresses
         .map {
-            if (with(adapter) {it.metadata}.pk.repoPk == localRepoInterRepoId)
+            if (it.metadata.pk.repoPk == localRepoInterRepoId)
             {
-                with(adapter) {it.copy(it.metadata.copy(pk = with(adapter) {it.metadata}.pk.copy(repoPk = DeltaRepo.LOCAL_NODE_ID)))}
+                it.copy(pk = it.metadata.pk.copy(repoPk = DeltaRepo.LOCAL_NODE_ID))
             }
             else
             {

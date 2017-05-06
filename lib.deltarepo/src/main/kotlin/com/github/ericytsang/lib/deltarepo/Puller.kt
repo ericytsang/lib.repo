@@ -2,16 +2,16 @@ package com.github.ericytsang.lib.deltarepo
 
 import java.io.Serializable
 
-class Puller<Item:Any>(private val adapter:Adapter<Item>)
+class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
 {
-    interface Remote<out Item:Any>
+    interface Remote<Item:DeltaRepo.Item<Item>>
     {
         fun pageByUpdateStamp(start:Long,order:Order,limit:Int):Result<Item>
 
-        data class Result<out Item>(val items:List<Item>,val deleteCount:Int):Serializable
+        data class Result<Item:DeltaRepo.Item<Item>>(val items:List<Item>,val deleteCount:Int):Serializable
     }
 
-    interface Adapter<Item:Any>
+    interface Adapter<Item:DeltaRepo.Item<Item>>
     {
         /**
          * size of batch to use when doing incremental operations.
@@ -69,38 +69,6 @@ class Puller<Item:Any>(private val adapter:Adapter<Item>)
          * true if dirty rows exist; false otherwise.
          */
         fun hasDirtyRows():Boolean
-
-        val Item.metadata:DeltaRepo.Item.Metadata
-
-        fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
-    }
-
-    private val itemAdapter = object:ItemAdapter<Item>
-    {
-        override val Item.metadata:DeltaRepo.Item.Metadata get()
-        {
-            return with(adapter) {metadata}
-        }
-
-        override fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
-        {
-            return with(adapter) {copy(newMetadata)}
-        }
-    }
-
-    val Item.metadata:DeltaRepo.Item.Metadata get()
-    {
-        return with(adapter) {metadata}
-    }
-
-    fun Item.copy(
-        pk:DeltaRepo.Item.Pk = metadata.pk,
-        updateStamp:Long? = metadata.updateStamp,
-        syncStatus:DeltaRepo.Item.SyncStatus = metadata.syncStatus,
-        isDeleted:Boolean = metadata.isDeleted)
-        :Item
-    {
-        return with(adapter) {copy(DeltaRepo.Item.Metadata(pk,updateStamp,syncStatus,isDeleted))}
     }
 
     private fun merge(old:Item?,new:Item):Item
@@ -111,10 +79,12 @@ class Puller<Item:Any>(private val adapter:Adapter<Item>)
             DeltaRepo.Item.SyncStatus.PUSHED,
             DeltaRepo.Item.SyncStatus.PULLED ->
             {
-                adapter.merge(old,new).copy(
-                    pk = new.metadata.pk,
-                    updateStamp = new.metadata.updateStamp!!,
-                    syncStatus = DeltaRepo.Item.SyncStatus.PULLED)
+                adapter.merge(old,new).let {it.copy(
+                    it.metadata.copy(
+                        pk = new.metadata.pk,
+                        updateStamp = new.metadata.updateStamp!!,
+                        syncStatus = DeltaRepo.Item.SyncStatus.PULLED))
+                }
             }
             DeltaRepo.Item.SyncStatus.DIRTY ->
             {
@@ -141,7 +111,7 @@ class Puller<Item:Any>(private val adapter:Adapter<Item>)
                 // count the number of records deleted on master
                 .map {if (it.metadata.isDeleted) adapter.deleteCount++;it}
                 // localize updates
-                .localized(itemAdapter,localRepoInterRepoId,remoteRepoInterRepoId)
+                .localized(localRepoInterRepoId,remoteRepoInterRepoId)
                 // lookup the existing item...
                 .map {adapter.selectByPk(it.metadata.pk) to it}
                 // merge...

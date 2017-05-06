@@ -47,14 +47,4 @@ class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem>
     {
         return prevUpdateStamp++
     }
-
-    override val MockItem.metadata:DeltaRepo.Item.Metadata get()
-    {
-        return metadata(DeltaRepo.Item.Companion)
-    }
-
-    override fun MockItem.copy(newMetadata:DeltaRepo.Item.Metadata):MockItem
-    {
-        return copy(DeltaRepo.Item.Companion,newMetadata.pk,newMetadata.updateStamp,newMetadata.syncStatus,newMetadata.isDeleted)
-    }
 }

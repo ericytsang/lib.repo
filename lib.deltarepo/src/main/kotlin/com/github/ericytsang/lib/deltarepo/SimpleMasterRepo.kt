@@ -1,8 +1,8 @@
 package com.github.ericytsang.lib.deltarepo
 
-open class SimpleMasterRepo<Item:Any>(protected val adapter:Adapter<Item>):MasterRepo<Item>
+open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Adapter<Item>):MasterRepo<Item>
 {
-    interface Adapter<Item:Any>
+    interface Adapter<Item:DeltaRepo.Item<Item>>
     {
         /**
          * size of batch to use when doing incremental operations.
@@ -50,25 +50,6 @@ open class SimpleMasterRepo<Item:Any>(protected val adapter:Adapter<Item>):Maste
          * delete all where [DeltaRepo.Item.pk] in [pks].
          */
         fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
-
-        val Item.metadata:DeltaRepo.Item.Metadata
-
-        fun Item.copy(newMetadata:DeltaRepo.Item.Metadata):Item
-    }
-
-    private val Item.metadata:DeltaRepo.Item.Metadata get()
-    {
-        return with(adapter) {metadata}
-    }
-
-    private fun Item.copy(
-        pk:DeltaRepo.Item.Pk = metadata.pk,
-        updateStamp:Long? = metadata.updateStamp,
-        syncStatus:DeltaRepo.Item.SyncStatus = metadata.syncStatus,
-        isDeleted:Boolean = metadata.isDeleted)
-        :Item
-    {
-        return with(adapter) {copy(DeltaRepo.Item.Metadata(pk,updateStamp,syncStatus,isDeleted))}
     }
 
     override val pushTarget = object:Pusher.Remote<Item>
