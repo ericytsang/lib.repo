@@ -51,22 +51,6 @@ interface DeltaRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,
             isDeleted:Boolean = this.isDeleted)
             :SubClass
     }
-
-    /**
-     * inserts [items] into the repo and replaces any existing records with
-     * conflicting [Item.pk]s.
-     */
-    fun insertOrReplace(items:Iterable<Item>):Set<Item>
-
-    /**
-     * deletes all records where [Item.pk] in [pks].
-     */
-    fun deleteByPk(pks:Set<ItemPk>)
-
-    /**
-     * returns the next unused [ItemPk]
-     */
-    fun computeNextPk():ItemPk
 }
 
 internal fun <ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>> Sequence<Item>.localized(localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Sequence<Item>

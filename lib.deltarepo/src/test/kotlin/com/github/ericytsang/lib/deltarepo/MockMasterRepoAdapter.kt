@@ -41,9 +41,9 @@ class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem.Pk,MockItem>
         items.forEach {records[it.pk] = it}
     }
 
-    override fun merge(local:MockItem,remote:MockItem):MockItem
+    override fun merge(local:MockItem?,remote:MockItem):MockItem
     {
-        return remote.copy(string = local.string+remote.string)
+        return if (local == null) remote else remote.copy(string = local.string+remote.string)
     }
 
     override fun deleteByPk(pks:Set<MockItem.Pk>)

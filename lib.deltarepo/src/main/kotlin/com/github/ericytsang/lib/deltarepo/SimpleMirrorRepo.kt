@@ -3,73 +3,135 @@ package com.github.ericytsang.lib.deltarepo
 import com.github.ericytsang.lib.repo.Repo
 import com.github.ericytsang.lib.repo.SimpleRepo
 
-open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(protected val adapter:Adapter<ItemPk,Item>):SimpleRepo(),MirrorRepo<ItemPk,Item>
+open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(_adapter:Adapter<ItemPk,Item>):SimpleRepo(),MirrorRepo<ItemPk,Item>
 {
-    interface Adapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo,Pusher.Adapter<ItemPk,Item>,Puller.Adapter<ItemPk,Item>
+    interface Adapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>:Repo
     {
-        /**
-         * returns the next unused primary key.
-         */
+        val BATCH_SIZE:Int
+        var deleteCount:Int
         fun computeNextPk():ItemPk
+        fun insertOrReplace(item:Item)
+        fun selectDirtyItemsToPush(limit:Int):List<Item>
+        fun deleteByPk(pks:Set<ItemPk>)
+        fun selectByPk(pk:ItemPk):Item?
+        fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+        fun merge(dirtyLocalItem:Item?,pulledRemoteItem:Item):Item
+        fun setAllPulledToPushed()
+        fun deleteAllPushed()
     }
 
-    override val pusher = Pusher(object:Pusher.Adapter<ItemPk,Item> by adapter
+    private val adapter = object:Adapter<ItemPk,Item> by _adapter
     {
-        override fun selectNextUnsyncedToSync(limit:Int):List<Item>
+        override val BATCH_SIZE:Int get()
         {
             checkCanRead()
-            return adapter.selectNextUnsyncedToSync(limit)
+            return _adapter.BATCH_SIZE
         }
 
-        override fun insertOrReplace(item:Item)
-        {
-            checkCanWrite()
-            return adapter.insertOrReplace(item)
-        }
-    })
-
-    override val puller = Puller(object:Puller.Adapter<ItemPk,Item> by adapter
-    {
         override var deleteCount:Int
             get()
             {
                 checkCanRead()
-                return adapter.deleteCount
+                return _adapter.deleteCount
             }
             set(value)
             {
                 checkCanWrite()
-                adapter.deleteCount = value
+                _adapter.deleteCount = value
             }
 
-        override fun selectByPk(pk:ItemPk):Item?
+        override fun computeNextPk():ItemPk
         {
-            checkCanRead()
-            return adapter.selectByPk(pk)
-        }
-
-        override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
-        {
-            checkCanRead()
-            return adapter.pagePulledByUpdateStamp(start,order,limit)
+            checkCanWrite()
+            return _adapter.computeNextPk()
         }
 
         override fun insertOrReplace(item:Item)
         {
             checkCanWrite()
-            return adapter.insertOrReplace(item)
+            _adapter.insertOrReplace(item)
+        }
+
+        override fun selectDirtyItemsToPush(limit:Int):List<Item>
+        {
+            checkCanRead()
+            return _adapter.selectDirtyItemsToPush(limit)
         }
 
         override fun deleteByPk(pks:Set<ItemPk>)
         {
             checkCanWrite()
-            return adapter.deleteByPk(pks)
+            _adapter.deleteByPk(pks)
+        }
+
+        override fun selectByPk(pk:ItemPk):Item?
+        {
+            checkCanRead()
+            return _adapter.selectByPk(pk)
+        }
+    }
+
+    override val pusher = Pusher(object:Pusher.Adapter<ItemPk,Item>
+    {
+        override val BATCH_SIZE:Int get() = adapter.BATCH_SIZE
+
+        override fun selectDirtyItemsToPush(limit:Int):List<Item>
+        {
+            return adapter.selectDirtyItemsToPush(limit)
+        }
+
+        override fun insertOrReplace(item:Item)
+        {
+            return adapter.insertOrReplace(item)
+        }
+    })
+
+    override val puller = Puller(object:Puller.Adapter<ItemPk,Item>
+    {
+        override val BATCH_SIZE:Int get() = adapter.BATCH_SIZE
+
+        override var deleteCount:Int
+            get() = adapter.deleteCount
+            set(value) { adapter.deleteCount = value }
+
+        override fun selectByPk(pk:ItemPk):Item?
+        {
+            return adapter.selectByPk(pk)
+        }
+
+        override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+        {
+            return adapter.pagePulledByUpdateStamp(start,order,limit)
+        }
+
+        override fun merge(dirtyLocalItem:Item?,pulledRemoteItem:Item):Item
+        {
+            return adapter.merge(dirtyLocalItem,pulledRemoteItem)
+        }
+
+        override fun insertOrReplace(item:Item)
+        {
+            return adapter.insertOrReplace(item)
+        }
+
+        override fun deleteByPk(pks:Set<ItemPk>)
+        {
+            adapter.deleteByPk(pks)
         }
 
         override fun setAllPulledToPushed()
         {
-            checkCanWrite()
-            return adapter.setAllPulledToPushed()
+            adapter.setAllPulledToPushed()
+        }
+
+        override fun deleteAllPushed()
+        {
+            adapter.deleteAllPushed()
+        }
+
+        override fun hasDirtyRows():Boolean
+        {
+            return adapter.selectDirtyItemsToPush(1).isNotEmpty()
         }
     })
 
@@ -83,9 +145,8 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
      * - if previously exists [DeltaRepo.Item.updateStamp] = previousRecord's
      *   [DeltaRepo.Item.updateStamp]
      */
-    override fun insertOrReplace(items:Iterable<Item>):Set<Item>
+    fun insertOrReplace(items:Iterable<Item>):Set<Item>
     {
-        checkCanWrite()
         val itemsToInsert = items
             .asSequence()
             .map {
@@ -105,9 +166,8 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
      * - [DeltaRepo.Item.isDeleted] = true
      * where [DeltaRepo.Item.pk] in [pks].
      */
-    override fun deleteByPk(pks:Set<ItemPk>)
+    fun deleteByPk(pks:Set<ItemPk>)
     {
-        checkCanWrite()
         val items = pks
             .mapNotNull {adapter.selectByPk(it)}
             .filter {!it.isDeleted}
@@ -118,9 +178,8 @@ open class SimpleMirrorRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
     /**
      * returns the next unused primary key.
      */
-    override fun computeNextPk():ItemPk
+    fun computeNextPk():ItemPk
     {
-        checkCanWrite()
         return adapter.computeNextPk()
     }
 

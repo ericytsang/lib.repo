@@ -47,7 +47,7 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
         /**
          * takes care of merging updates from mirrors into the master repo.
          */
-        fun merge(local:Item,remote:Item):Item
+        fun merge(local:Item?,remote:Item):Item
 
         /**
          * delete all where [DeltaRepo.Item.pk] in [pks].
@@ -62,14 +62,14 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
 
     override val pushTarget = object:Pusher.Remote<ItemPk,Item>
     {
-        override fun insertOrReplace(items:Iterable<Item>):HashSet<Item>
+        override fun insertOrReplace(items:Iterable<Item>)
         {
             checkCanWrite()
-            return this@SimpleMasterRepo.insertOrReplace(items
+            this@SimpleMasterRepo.insertOrReplace(items
                 .map {
                     update ->
                     val existing = adapter.selectByPk(update.pk)
-                    val merged = if (existing != null) adapter.merge(existing,update) else update
+                    val merged = adapter.merge(existing,update)
                     check(merged.pk == update.pk)
                     merged
                 })
@@ -99,7 +99,7 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
      * - [DeltaRepo.Item.syncStatus] = [DeltaRepo.Item.SyncStatus.PULLED]
      * - [DeltaRepo.Item.updateStamp] = [MasterRepoAdapter.computeNextUpdateStamp]
      */
-    override fun insertOrReplace(items:Iterable<Item>):HashSet<Item>
+    private fun insertOrReplace(items:Iterable<Item>):HashSet<Item>
     {
         checkCanWrite()
         val (toDelete,toInsert) = items
@@ -121,7 +121,7 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
     /**
      * delete all where [DeltaRepo.Item.pk] in [pks].
      */
-    override fun deleteByPk(pks:Set<ItemPk>)
+    private fun deleteByPk(pks:Set<ItemPk>)
     {
         checkCanWrite()
         // sets the isDeleted flag of entries whose pk are in pks
@@ -162,15 +162,6 @@ open class SimpleMasterRepo<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item
             }
         }
         while (true)
-    }
-
-    /**
-     * returns the next unused primary key.
-     */
-    override fun computeNextPk():ItemPk
-    {
-        checkCanWrite()
-        return adapter.computeNextPk()
     }
 
     override fun <R> read(block:()->R):R

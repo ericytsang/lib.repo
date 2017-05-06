@@ -39,7 +39,7 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
         /**
          * takes care of merging [pulledRemoteItem] into [dirtyLocalItem].
          */
-        fun merge(dirtyLocalItem:Item,pulledRemoteItem:Item):Item
+        fun merge(dirtyLocalItem:Item?,pulledRemoteItem:Item):Item
 
         /**
          * inserts [item] into the repo. replaces any existing record with the same
@@ -64,31 +64,30 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
          * [DeltaRepo.Item.syncStatus] == [DeltaRepo.Item.SyncStatus.PUSHED].
          */
         fun deleteAllPushed()
+
+        /**
+         * true if dirty rows exist; false otherwise.
+         */
+        fun hasDirtyRows():Boolean
     }
 
     private fun merge(old:Item?,new:Item):Item
     {
-        if (old == null) return new
-        check(old.pk == new.pk)
-        check(old.updateStamp!! <= new.updateStamp!!)
-        return when (old.syncStatus)
+        return when (old?.syncStatus)
         {
+            null,
             DeltaRepo.Item.SyncStatus.PUSHED,
-            DeltaRepo.Item.SyncStatus.PULLED -> new
+            DeltaRepo.Item.SyncStatus.PULLED ->
+            {
+                adapter.merge(old,new).copy(
+                    DeltaRepo.Item.Companion,
+                    pk = new.pk,
+                    updateStamp = new.updateStamp!!,
+                    syncStatus = DeltaRepo.Item.SyncStatus.PULLED)
+            }
             DeltaRepo.Item.SyncStatus.DIRTY ->
             {
-                if (old.updateStamp!! == new.updateStamp!!)
-                {
-                    old
-                }
-                else
-                {
-                    adapter.merge(old,new).copy(
-                        DeltaRepo.Item.Companion,
-                        pk = new.pk,
-                        updateStamp = new.updateStamp!!,
-                        syncStatus = DeltaRepo.Item.SyncStatus.DIRTY)
-                }
+                throw IllegalStateException("no dirty rows in repo allowed when pulling.")
             }
         }
     }
@@ -132,6 +131,9 @@ class Puller<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
 
     fun pull(remote:Remote<ItemPk,Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk)
     {
+        // make sure there are no dirty rows
+        check(!adapter.hasDirtyRows()) {"no dirty rows in repo allowed when pulling."}
+
         // pull data
         val remoteDeleteCount = _pull(remote,localRepoInterRepoId,remoteRepoInterRepoId)
 

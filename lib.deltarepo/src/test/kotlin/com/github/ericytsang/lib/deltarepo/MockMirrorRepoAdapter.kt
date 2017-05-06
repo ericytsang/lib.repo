@@ -54,9 +54,9 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
         }
     }
 
-    override fun merge(dirtyLocalItem:MockItem,pulledRemoteItem:MockItem):MockItem
+    override fun merge(dirtyLocalItem:MockItem?,pulledRemoteItem:MockItem):MockItem
     {
-        return pulledRemoteItem.copy(string = dirtyLocalItem.string+pulledRemoteItem.string)
+        return if (dirtyLocalItem == null) pulledRemoteItem else pulledRemoteItem.copy(string = dirtyLocalItem.string+pulledRemoteItem.string)
     }
 
     private var prevId = Long.MIN_VALUE
@@ -66,7 +66,7 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem.Pk,MockItem>
         return MockItem.Pk(DeltaRepo.LOCAL_NODE_ID,DeltaRepo.ItemPk(prevId++))
     }
 
-    override fun selectNextUnsyncedToSync(limit:Int):List<MockItem>
+    override fun selectDirtyItemsToPush(limit:Int):List<MockItem>
     {
         return records.values.filter {it.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY}.take(limit)
     }

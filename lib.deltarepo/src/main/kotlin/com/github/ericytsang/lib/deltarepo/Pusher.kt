@@ -8,7 +8,7 @@ class Pusher<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
          * takes care of merging [items] into the local database (the database that
          * is being inserted into).
          */
-        fun insertOrReplace(items:Iterable<Item>):HashSet<Item>
+        fun insertOrReplace(items:Iterable<Item>)
     }
 
     interface Adapter<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>
@@ -22,7 +22,7 @@ class Pusher<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
          * selects the next [limit] [DeltaRepo.Item]s to sync to the [SimpleMasterRepo].
          * [DeltaRepo.Item.syncStatus] == [DeltaRepo.Item.SyncStatus.DIRTY]
          */
-        fun selectNextUnsyncedToSync(limit:Int):List<Item>
+        fun selectDirtyItemsToPush(limit:Int):List<Item>
 
         /**
          * inserts [item] into the repo. replaces any existing record with the same
@@ -36,18 +36,14 @@ class Pusher<ItemPk:DeltaRepo.Item.Pk<ItemPk>,Item:DeltaRepo.Item<ItemPk,Item>>(
         // push updates
         do
         {
-            val toPush = adapter.selectNextUnsyncedToSync(adapter.BATCH_SIZE)
+            val toPush = adapter.selectDirtyItemsToPush(adapter.BATCH_SIZE)
+                .map {it.copy(DeltaRepo.Item.Companion,syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
+            remote.insertOrReplace(toPush
                 .asSequence()
                 .localized(remoteRepoInterRepoId,localRepoInterRepoId)
-                .toList()
-            val pushed = remote.insertOrReplace(toPush)
-                .asSequence()
-                .map {it.copy(DeltaRepo.Item.Companion,syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
-                .localized(localRepoInterRepoId,remoteRepoInterRepoId)
-                .toList()
-            pushed.forEach {
-                adapter.insertOrReplace(it)
-            }
+                .toList())
+            toPush
+                .forEach {adapter.insertOrReplace(it)}
         }
         while (toPush.isNotEmpty())
     }
