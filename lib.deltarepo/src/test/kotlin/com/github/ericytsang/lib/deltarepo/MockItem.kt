@@ -1,5 +1,7 @@
 package com.github.ericytsang.lib.deltarepo
 
+import java.io.Serializable
+
 data class MockItem(
     val pk:Pk,
     val updateStamp:Long?,
@@ -8,7 +10,7 @@ data class MockItem(
     val string:String)
     :DeltaRepo.Item<MockItem>
 {
-    data class Pk(val value:DeltaRepo.Item.Pk)
+    data class Pk(val value:DeltaRepo.Item.Pk):Serializable
     fun copy(
         unused:DeltaRepo.Item.Companion,
         pk:DeltaRepo.Item.Pk = this.pk.value,

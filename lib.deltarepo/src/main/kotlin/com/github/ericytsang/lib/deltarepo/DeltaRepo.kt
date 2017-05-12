@@ -23,12 +23,12 @@ interface DeltaRepo
     }
     data class RepoPk(val id:Long):Serializable
     data class ItemPk(val id:Long):Serializable
-    interface Item<SubClass:Item<SubClass>>
+    interface Item<SubClass:Item<SubClass>>:Serializable
     {
         companion object;
         data class Pk(
             val repoPk:DeltaRepo.RepoPk,
-            val itemPk:DeltaRepo.ItemPk)
+            val itemPk:DeltaRepo.ItemPk):Serializable
         data class Metadata(
             val pk:Pk,
             val updateStamp:Long?,
