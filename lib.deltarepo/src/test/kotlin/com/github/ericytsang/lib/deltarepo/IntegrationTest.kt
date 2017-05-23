@@ -4,8 +4,6 @@ import org.junit.Test
 
 class IntegrationTest
 {
-    var hasMirror1ReSynced = false
-    var hasMirror2ReSynced = false
 
     // create test subjects
     val mirror1Adapter = MockMirrorRepoAdapter()
@@ -13,7 +11,6 @@ class IntegrationTest
     {
         override fun deleteAllPushed()
         {
-            hasMirror1ReSynced = true
             mirror1Adapter.deleteAllPushed()
         }
     })
@@ -22,7 +19,6 @@ class IntegrationTest
     {
         override fun deleteAllPushed()
         {
-            hasMirror2ReSynced = true
             mirror2Adapter.deleteAllPushed()
         }
     })
@@ -56,11 +52,11 @@ class IntegrationTest
         // sync records to master & mirror2
         run {
             // merge into master
-            mirror1.pusher.push(master.pushTarget,mirror1Id,masterId)
+            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
 
             // pull from master into mirror2
-            mirror1.puller.pull(master.pullTarget,mirror1Id,masterId)
-            mirror2.puller.pull(master.pullTarget,mirror2Id,masterId)
+            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
+            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
         }
 
         // check records are in all repos
@@ -74,8 +70,6 @@ class IntegrationTest
             check(mirror1Adapter.records.values.all {it.updateStamp != null})
             check(mirror2Adapter.records.values.all {it.string.count {it == 'p'} == 1})
             check(mirror1Adapter.records.values.all {it.string.count {it == 'p'} == 2})
-            check(!hasMirror1ReSynced)
-            check(!hasMirror2ReSynced)
         }
     }
 
@@ -93,11 +87,11 @@ class IntegrationTest
         // sync mirror2 records to master & mirrors
         run {
             // merge into master
-            mirror2.pusher.push(master.pushTarget,mirror2Id,masterId)
+            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
 
             // pull from master into mirror1 & mirror2
-            mirror1.puller.pull(master.pullTarget,mirror1Id,masterId)
-            mirror2.puller.pull(master.pullTarget,mirror2Id,masterId)
+            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
+            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
         }
 
         // check records are deleted in all repos and merging is as expected
@@ -108,8 +102,6 @@ class IntegrationTest
         check(masterAdapter.selectByPk(pks[6].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(mirror2Adapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id)) == null)
         check(mirror2Adapter.selectByPk(pks[6].value.copy(repoPk = mirror1Id)) == null)
-        check(!hasMirror1ReSynced)
-        check(!hasMirror2ReSynced)
     }
 
     @Test
@@ -128,11 +120,11 @@ class IntegrationTest
         // sync mirror2 records to master & mirrors
         run {
             // merge into master
-            mirror2.pusher.push(master.pushTarget,mirror2Id,masterId)
+            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
 
             // pull from master into mirror1 & mirror2
-            mirror1.puller.pull(master.pullTarget,mirror1Id,masterId)
-            mirror2.puller.pull(master.pullTarget,mirror2Id,masterId)
+            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
+            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
         }
 
         // check records are deleted in all repos and merging is as expected
@@ -149,8 +141,6 @@ class IntegrationTest
         check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id)) == null)
         check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id)) == null)
         check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id)) == null)
-        check(hasMirror1ReSynced)
-        check(hasMirror2ReSynced)
     }
 
     @Test
@@ -171,12 +161,12 @@ class IntegrationTest
         // sync mirror2 records to master & mirrors
         run {
             // merge into master
-            mirror1.pusher.push(master.pushTarget,mirror1Id,masterId)
-            mirror2.pusher.push(master.pushTarget,mirror2Id,masterId)
+            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
+            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
 
             // pull from master into mirror1 & mirror2
-            mirror1.puller.pull(master.pullTarget,mirror1Id,masterId)
-            mirror2.puller.pull(master.pullTarget,mirror2Id,masterId)
+            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
+            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
         }
 
         // check records are deleted in all repos and merging is as expected
@@ -193,8 +183,6 @@ class IntegrationTest
         check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id)) == null)
         check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id)) == null)
         check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id)) == null)
-        check(hasMirror1ReSynced)
-        check(hasMirror2ReSynced)
     }
 
     @Test
@@ -211,19 +199,17 @@ class IntegrationTest
         // sync mirror2 records to master & mirrors
         run {
             // merge into master
-            mirror2.pusher.push(master.pushTarget,mirror2Id,masterId)
+            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
 
             // pull from master into mirror1 & mirror2
-            mirror1.puller.pull(master.pullTarget,mirror1Id,masterId)
-            mirror2.puller.pull(master.pullTarget,mirror2Id,masterId)
+            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
+            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
         }
 
         // check records are deleted in all repos and merging is as expected
         check(mirror1Adapter.selectByPk(pks[7].value)?.string == "pks[7]pks[7]pks[7]pee") {mirror1Adapter.selectByPk(pks[7].value)?.string ?: ""}
         check(masterAdapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "pks[7]pee")
         check(mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "peepks[7]pee")
-        check(!hasMirror1ReSynced)
-        check(!hasMirror2ReSynced)
     }
 
     @Test
@@ -244,36 +230,32 @@ class IntegrationTest
         // sync mirror2 records to master & mirrors
         run {
             // merge into master
-            mirror2.pusher.push(master.pushTarget,mirror2Id,masterId)
-            mirror1.pusher.push(master.pushTarget,mirror1Id,masterId)
+            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
+            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
 
             // pull from master into mirror1 & mirror2
-            mirror1.puller.pull(master.pullTarget,mirror1Id,masterId)
-            mirror2.puller.pull(master.pullTarget,mirror2Id,masterId)
+            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
+            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
         }
 
         // check records are deleted in all repos and merging is as expected
         check(mirror1Adapter.selectByPk(pks[7].value)?.string == "poopks[7]peepoo")
         check(masterAdapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "pks[7]peepoo")
         check(mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "peepks[7]peepoo")
-        check(!hasMirror1ReSynced)
-        check(!hasMirror2ReSynced)
 
         // sync mirror1 records to master & mirrors
         run {
             // merge into master
-            mirror1.pusher.push(master.pushTarget,mirror1Id,masterId)
+            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
 
             // pull from master into mirror1 & mirror2
-            mirror1.puller.pull(master.pullTarget,mirror1Id,masterId)
-            mirror2.puller.pull(master.pullTarget,mirror2Id,masterId)
+            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
+            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
         }
 
         // check that merging is as expected
         check(mirror1Adapter.selectByPk(pks[7].value)?.string == "poopks[7]peepoo") {mirror1Adapter.selectByPk(pks[7].value)?.string!!}
         check(masterAdapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "pks[7]peepoo")
         check(mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "peepks[7]peepoo")
-        check(!hasMirror1ReSynced)
-        check(!hasMirror2ReSynced)
     }
 }

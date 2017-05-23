@@ -93,62 +93,79 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
         }
     }
 
-    private fun _pull(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Int
+    data class BatchResult(val itemsProcessed:Int,val remoteDeleteCount:Int)
+
+    private fun _pullBatch(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):BatchResult
     {
-        var remoteDeleteCount:Int
+        val maxUpdateStampItem = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).singleOrNull()
+        val maxUpdateStamp = maxUpdateStampItem?.metadata?.updateStamp ?: Long.MIN_VALUE
+        val (items,deleteCount) = remote.pageByUpdateStamp(maxUpdateStamp,Order.ASC,adapter.BATCH_SIZE)
+        val remoteDeleteCount = deleteCount
+        val (toDelete,toInsert) = items
+            .asSequence()
+            // only process the new updates
+            .filter {it.metadata.updateStamp!! > maxUpdateStamp}
+            // count the number of records deleted on master
+            .map {if (it.metadata.isDeleted) adapter.deleteCount++;it}
+            // localize updates
+            .localized(localRepoInterRepoId,remoteRepoInterRepoId)
+            // lookup the existing item...
+            .map {adapter.selectByPk(it.metadata.pk) to it}
+            // merge...
+            .map {(existing,update) -> merge(existing,update)}
+            // partition...
+            .partition {it.metadata.isDeleted && it.metadata.syncStatus == DeltaRepo.Item.SyncStatus.PULLED}
 
-        // pull updates
-        do
-        {
-            val maxUpdateStampItem = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).singleOrNull()
-            val maxUpdateStamp = maxUpdateStampItem?.metadata?.updateStamp ?: Long.MIN_VALUE
-            val (items,deleteCount) = remote.pageByUpdateStamp(maxUpdateStamp,Order.ASC,adapter.BATCH_SIZE)
-            remoteDeleteCount = deleteCount
-            val (toDelete,toInsert) = items
-                .asSequence()
-                // only process the new updates
-                .filter {it.metadata.updateStamp!! > maxUpdateStamp}
-                // count the number of records deleted on master
-                .map {if (it.metadata.isDeleted) adapter.deleteCount++;it}
-                // localize updates
-                .localized(localRepoInterRepoId,remoteRepoInterRepoId)
-                // lookup the existing item...
-                .map {adapter.selectByPk(it.metadata.pk) to it}
-                // merge...
-                .map {(existing,update) -> merge(existing,update)}
-                // partition...
-                .partition {it.metadata.isDeleted && it.metadata.syncStatus == DeltaRepo.Item.SyncStatus.PULLED}
+        // insert items
+        toInsert.forEach {adapter.insertOrReplace(it)}
 
-            // insert items
-            toInsert.forEach {adapter.insertOrReplace(it)}
+        // delete items and do book keeping
+        adapter.deleteByPk(toDelete.map {it.metadata.pk}.toSet())
 
-            // delete items and do book keeping
-            adapter.deleteByPk(toDelete.map {it.metadata.pk}.toSet())
-        }
-        while (toInsert.size+toDelete.size >= adapter.BATCH_SIZE)
-
-        return remoteDeleteCount
+        return BatchResult(toInsert.size+toDelete.size,remoteDeleteCount)
     }
 
-    fun pull(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk)
+    fun pullAll(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk)
+    {
+        while (pullBatch(remote,localRepoInterRepoId,remoteRepoInterRepoId));
+    }
+
+    fun pullBatch(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Boolean
     {
         // make sure there are no dirty rows
         check(!adapter.hasDirtyRows()) {"no dirty rows in repo allowed when pulling."}
 
+        // if this is synchronizing from the very beginning, we should adopt the
+        // remoteDeleteCount since there is no way we will miss any "delete"
+        // updates when synchronizing starting from nothing.
+        val shouldAdoptRemoteDeleteCount = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).isEmpty()
+
         // pull data
-        val remoteDeleteCount = _pull(remote,localRepoInterRepoId,remoteRepoInterRepoId)
+        val (itemsProcessed,remoteDeleteCount) = _pullBatch(remote,localRepoInterRepoId,remoteRepoInterRepoId)
 
-        // pull data and make sure deletes are in sync. get in sync if deletes are not in sync.
-        if (adapter.deleteCount != remoteDeleteCount)
+        // set adapter.deleteCount after _pullBatch because _pullBatch modifies it
+        if (shouldAdoptRemoteDeleteCount) adapter.deleteCount = remoteDeleteCount
+
+        return when
         {
-            // set status of all PULLED items to PUSHED, and sync them one batch at a time.
-            adapter.setAllPulledToPushed()
-
-            // pull updates
-            adapter.deleteCount = _pull(remote,localRepoInterRepoId,remoteRepoInterRepoId)
-
-            // delete all pushed records (they did not exist on the master)
-            adapter.deleteAllPushed()
+        // when there are more items to process, return true
+            itemsProcessed >= adapter.BATCH_SIZE ->
+            {
+                true
+            }
+        // set status of all PULLED items to PUSHED, and sync them one batch at a time.
+            adapter.deleteCount != remoteDeleteCount ->
+            {
+                adapter.setAllPulledToPushed()
+                true
+            }
+        // delete all pushed records (they did not exist on the master)
+            adapter.deleteCount == remoteDeleteCount ->
+            {
+                adapter.deleteAllPushed()
+                false
+            }
+            else -> throw RuntimeException("else branch executed")
         }
     }
 }

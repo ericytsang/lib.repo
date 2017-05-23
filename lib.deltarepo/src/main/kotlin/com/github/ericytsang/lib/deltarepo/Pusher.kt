@@ -31,20 +31,21 @@ class Pusher<Item:DeltaRepo.Item<Item>>(private val adapter:Pusher.Adapter<Item>
         fun insertOrReplace(item:Item)
     }
 
-    fun push(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk)
+    fun pushAll(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk)
     {
-        // push updates
-        do
-        {
-            val toPush = adapter.selectDirtyItemsToPush(adapter.BATCH_SIZE)
-                .map {it.copy(syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
-            remote.insertOrReplace(toPush
-                .asSequence()
-                .localized(remoteRepoInterRepoId,localRepoInterRepoId)
-                .toList())
-            toPush
-                .forEach {adapter.insertOrReplace(it)}
-        }
-        while (toPush.isNotEmpty())
+        while (pushBatch(remote,localRepoInterRepoId,remoteRepoInterRepoId));
+    }
+
+    fun pushBatch(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Boolean
+    {
+        val toPush = adapter.selectDirtyItemsToPush(adapter.BATCH_SIZE)
+            .map {it.copy(syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)}
+        remote.insertOrReplace(toPush
+            .asSequence()
+            .localized(remoteRepoInterRepoId,localRepoInterRepoId)
+            .toList())
+        toPush
+            .forEach {adapter.insertOrReplace(it)}
+        return toPush.isNotEmpty()
     }
 }
