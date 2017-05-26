@@ -8,7 +8,7 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
     {
         fun pageByUpdateStamp(start:Long,order:Order,limit:Int):Result<Item>
 
-        data class Result<Item:DeltaRepo.Item<Item>>(val items:List<Item>,val deleteCount:Int):Serializable
+        data class Result<Item:DeltaRepo.Item<Item>>(val items:List<Item>,val deleteCount:Int,val remoteExistingDeletedItems:Int):Serializable
     }
 
     interface Adapter<Item:DeltaRepo.Item<Item>>
@@ -34,7 +34,7 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
          * equal to or after [start] when records are sorted in [order] order.
          * [DeltaRepo.Item.Metadata.syncStatus] == [DeltaRepo.Item.SyncStatus.PULLED]
          */
-        fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+        fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
 
         /**
          * takes care of merging [pulledRemoteItem] into [dirtyLocalItem].
@@ -93,38 +93,6 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
         }
     }
 
-    data class BatchResult(val itemsProcessed:Int,val remoteDeleteCount:Int)
-
-    private fun _pullBatch(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):BatchResult
-    {
-        val maxUpdateStampItem = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).singleOrNull()
-        val maxUpdateStamp = maxUpdateStampItem?.metadata?.updateStamp ?: Long.MIN_VALUE
-        val (items,deleteCount) = remote.pageByUpdateStamp(maxUpdateStamp,Order.ASC,adapter.BATCH_SIZE)
-        val remoteDeleteCount = deleteCount
-        val (toDelete,toInsert) = items
-            .asSequence()
-            // only process the new updates
-            .filter {it.metadata.updateStamp!! > maxUpdateStamp}
-            // count the number of records deleted on master
-            .map {if (it.metadata.isDeleted) adapter.deleteCount++;it}
-            // localize updates
-            .localized(localRepoInterRepoId,remoteRepoInterRepoId)
-            // lookup the existing item...
-            .map {adapter.selectByPk(it.metadata.pk) to it}
-            // merge...
-            .map {(existing,update) -> merge(existing,update)}
-            // partition...
-            .partition {it.metadata.isDeleted && it.metadata.syncStatus == DeltaRepo.Item.SyncStatus.PULLED}
-
-        // insert items
-        toInsert.forEach {adapter.insertOrReplace(it)}
-
-        // delete items and do book keeping
-        adapter.deleteByPk(toDelete.map {it.metadata.pk}.toSet())
-
-        return BatchResult(toInsert.size+toDelete.size,remoteDeleteCount)
-    }
-
     fun pullAll(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk)
     {
         while (pullBatch(remote,localRepoInterRepoId,remoteRepoInterRepoId));
@@ -135,21 +103,56 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
         // make sure there are no dirty rows
         check(!adapter.hasDirtyRows()) {"no dirty rows in repo allowed when pulling."}
 
+        // pull data
+        val maxUpdateStampItem = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1,null).singleOrNull()
+        val maxUpdateStamp = maxUpdateStampItem?.metadata?.updateStamp?.plus(1) ?: Long.MIN_VALUE
+        val (pulledItems,remoteDeleteCount,remoteExistingDeletedItemsCount) = remote.pageByUpdateStamp(maxUpdateStamp,Order.ASC,adapter.BATCH_SIZE)
+
         // if this is synchronizing from the very beginning, we should adopt the
         // remoteDeleteCount since there is no way we will miss any "delete"
         // updates when synchronizing starting from nothing.
-        val shouldAdoptRemoteDeleteCount = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1).isEmpty()
+        val shouldAdoptRemoteDeleteCount = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1,null).isEmpty()
+        if (shouldAdoptRemoteDeleteCount) adapter.deleteCount = remoteDeleteCount-remoteExistingDeletedItemsCount
 
-        // pull data
-        val (itemsProcessed,remoteDeleteCount) = _pullBatch(remote,localRepoInterRepoId,remoteRepoInterRepoId)
+        // process remote items and insert into db
+        pulledItems
+            .asSequence()
+            // count the number of records deleted on master
+            .map {if (it.metadata.isDeleted) adapter.deleteCount++;it}
+            // localize updates
+            .localized(localRepoInterRepoId,remoteRepoInterRepoId)
+            // lookup the existing item...
+            .map {adapter.selectByPk(it.metadata.pk) to it}
+            // merge...
+            .map {(existing,update) -> merge(existing,update)}
+            // insert items
+            .forEach {adapter.insertOrReplace(it)}
 
-        // set adapter.deleteCount after _pullBatch because _pullBatch modifies it
-        if (shouldAdoptRemoteDeleteCount) adapter.deleteCount = remoteDeleteCount
+        // delete oldest items whose isDeleted flag is set from db until only n
+        // items in the db with the isDeleted flag set
+        var numDeletedItemsToRetainCount = remoteExistingDeletedItemsCount
+        var start = Long.MAX_VALUE
+        do
+        {
+            val deletedItems = adapter
+                .pagePulledByUpdateStamp(start,Order.DESC,adapter.BATCH_SIZE,true)
+                .filter {it.metadata.updateStamp != start}
+            start = deletedItems.lastOrNull()?.metadata?.updateStamp ?: break
+
+            val numItemsToRetain = Math.min(numDeletedItemsToRetainCount,deletedItems.size)
+            numDeletedItemsToRetainCount = Math.max(numDeletedItemsToRetainCount-numItemsToRetain,0)
+            val itemsToDelete = deletedItems.drop(numItemsToRetain).map {it.metadata.pk}.toSet()
+            if (itemsToDelete.isNotEmpty())
+            {
+                adapter.deleteByPk(itemsToDelete)
+            }
+        }
+        while (true)
 
         return when
         {
         // when there are more items to process, return true
-            itemsProcessed >= adapter.BATCH_SIZE ->
+            pulledItems.size >= adapter.BATCH_SIZE ->
             {
                 true
             }

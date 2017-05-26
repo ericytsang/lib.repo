@@ -6,7 +6,7 @@ class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem>
 
     override val BATCH_SIZE:Int = 3
 
-    override val MAX_DELETED_ITEMS_TO_RETAIN:Long = 3
+    override val MAX_DELETED_ITEMS_TO_RETAIN:Int = 3
 
     override var deleteCount:Int = 0
 
@@ -46,5 +46,10 @@ class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem>
     override fun computeNextUpdateStamp():Long
     {
         return prevUpdateStamp++
+    }
+
+    override val rowsWhereIsDeletedCount:Int get()
+    {
+        return records.values.count {it.isDeleted}
     }
 }

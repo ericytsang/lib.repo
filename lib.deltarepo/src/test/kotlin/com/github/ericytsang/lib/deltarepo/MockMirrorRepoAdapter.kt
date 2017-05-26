@@ -4,7 +4,7 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem>
 {
     val records = mutableMapOf<MockItem.Pk,MockItem>()
 
-    override val BATCH_SIZE:Int = 500
+    override val BATCH_SIZE:Int = 3
 
     override var deleteCount:Int = 0
 
@@ -13,12 +13,13 @@ class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem>
         return records[MockItem.Pk(pk)]
     }
 
-    override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<MockItem>
+    override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<MockItem>
     {
         return records.values
             .asSequence()
             .filter {it.updateStamp != null}
             .sortedBy {it.updateStamp}
+            .filter {it.isDeleted == isDeleted?:it.isDeleted}
             .filter {order.isAfterOrEqual(start,it.updateStamp!!)}
             .filter {it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED}
             .toList()

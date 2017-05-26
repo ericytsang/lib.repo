@@ -11,7 +11,7 @@ open class SimpleMirrorRepo<Item:DeltaRepo.Item<Item>>(private val adapter:Adapt
         fun selectDirtyItemsToPush(limit:Int):List<Item>
         fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
         fun selectByPk(pk:DeltaRepo.Item.Pk):Item?
-        fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+        fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
         fun merge(dirtyLocalItem:Item?,pulledRemoteItem:Item):Item
         fun setAllPulledToPushed()
         fun deleteAllPushed()
@@ -45,9 +45,9 @@ open class SimpleMirrorRepo<Item:DeltaRepo.Item<Item>>(private val adapter:Adapt
             return adapter.selectByPk(pk)
         }
 
-        override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+        override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
         {
-            return adapter.pagePulledByUpdateStamp(start,order,limit)
+            return adapter.pagePulledByUpdateStamp(start,order,limit,isDeleted)
         }
 
         override fun merge(dirtyLocalItem:Item?,pulledRemoteItem:Item):Item

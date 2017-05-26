@@ -95,13 +95,13 @@ class IntegrationTest
         }
 
         // check records are deleted in all repos and merging is as expected
-        check(mirror1Adapter.selectByPk(pks[5].value) == null)
-        check(mirror1Adapter.selectByPk(pks[6].value) == null)
+        check(mirror1Adapter.selectByPk(pks[5].value)?.isDeleted == true)
+        check(mirror1Adapter.selectByPk(pks[6].value)?.isDeleted == true)
         // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
         check(masterAdapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(masterAdapter.selectByPk(pks[6].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-        check(mirror2Adapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id)) == null)
-        check(mirror2Adapter.selectByPk(pks[6].value.copy(repoPk = mirror1Id)) == null)
+        check(mirror2Adapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[6].value.copy(repoPk = mirror1Id))?.isDeleted == true)
     }
 
     @Test
@@ -129,18 +129,18 @@ class IntegrationTest
 
         // check records are deleted in all repos and merging is as expected
         check(mirror1Adapter.selectByPk(pks[0].value) == null)
-        check(mirror1Adapter.selectByPk(pks[1].value) == null)
-        check(mirror1Adapter.selectByPk(pks[2].value) == null)
-        check(mirror1Adapter.selectByPk(pks[3].value) == null)
+        check(mirror1Adapter.selectByPk(pks[1].value)?.isDeleted == true)
+        check(mirror1Adapter.selectByPk(pks[2].value)?.isDeleted == true)
+        check(mirror1Adapter.selectByPk(pks[3].value)?.isDeleted == true)
         // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
         check(masterAdapter.selectByPk(pks[0].value.copy(repoPk = mirror1Id)) == null)
         check(masterAdapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(masterAdapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(masterAdapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(mirror2Adapter.selectByPk(pks[0].value.copy(repoPk = mirror1Id)) == null)
-        check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id)) == null)
-        check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id)) == null)
-        check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id)) == null)
+        check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
     }
 
     @Test
@@ -171,18 +171,18 @@ class IntegrationTest
 
         // check records are deleted in all repos and merging is as expected
         check(mirror1Adapter.selectByPk(pks[0].value) == null)
-        check(mirror1Adapter.selectByPk(pks[1].value) == null)
-        check(mirror1Adapter.selectByPk(pks[2].value) == null)
-        check(mirror1Adapter.selectByPk(pks[3].value) == null)
+        check(mirror1Adapter.selectByPk(pks[1].value)?.isDeleted == true)
+        check(mirror1Adapter.selectByPk(pks[2].value)?.isDeleted == true)
+        check(mirror1Adapter.selectByPk(pks[3].value)?.isDeleted == true)
         // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
         check(masterAdapter.selectByPk(pks[0].value.copy(repoPk = mirror1Id)) == null)
         check(masterAdapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(masterAdapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(masterAdapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(mirror2Adapter.selectByPk(pks[0].value.copy(repoPk = mirror1Id)) == null)
-        check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id)) == null)
-        check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id)) == null)
-        check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id)) == null)
+        check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
     }
 
     @Test

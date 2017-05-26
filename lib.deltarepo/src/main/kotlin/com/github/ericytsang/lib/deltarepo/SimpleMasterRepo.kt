@@ -15,7 +15,7 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
          * long so that it fails to sync deletes, it will have to execute a more
          * intensive routine to get back in sync with the master.
          */
-        val MAX_DELETED_ITEMS_TO_RETAIN:Long
+        val MAX_DELETED_ITEMS_TO_RETAIN:Int
 
         /**
          * persistent, mutable integer initialized to 0. used by context to count
@@ -50,6 +50,12 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
          * delete all where [DeltaRepo.Item.Metadata.pk] in [pks].
          */
         fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
+
+        /**
+         * number of rows in the database where
+         * [DeltaRepo.Item.Metadata.isDeleted] == true.
+         */
+        val rowsWhereIsDeletedCount:Int
     }
 
     override val pushTarget = object:Pusher.Remote<Item>
@@ -73,7 +79,8 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
         {
             return Puller.Remote.Result(
                 adapter.pageByUpdateStamp(start,order,limit,null),
-                adapter.deleteCount)
+                adapter.deleteCount,
+                adapter.rowsWhereIsDeletedCount)
         }
     }
 
@@ -140,7 +147,7 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
                 .filter {it.metadata.updateStamp != start}
             start = items.lastOrNull()?.metadata?.updateStamp ?: break
 
-            val numItemsToRetain = Math.min(numDeletedItemsToRetainCount,items.size.toLong()).toInt()
+            val numItemsToRetain = Math.min(numDeletedItemsToRetainCount,items.size)
             numDeletedItemsToRetainCount = Math.max(numDeletedItemsToRetainCount-numItemsToRetain,0)
             val itemsToDelete = items.drop(numItemsToRetain).map {it.metadata.pk}.toSet()
             if (itemsToDelete.isNotEmpty())
