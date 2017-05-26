@@ -27,12 +27,12 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
 
         /**
          * inserts all [items] into the repo and replaces any records with
-         * conflicting [DeltaRepo.Item.pk].
+         * conflicting [DeltaRepo.Item.Metadata.pk].
          */
         fun insertOrReplace(items:Iterable<Item>)
 
         /**
-         * returns the [Item] whose [DeltaRepo.Item.pk] == [pk]; null if not exists.
+         * returns the [Item] whose [DeltaRepo.Item.Metadata.pk] == [pk]; null if not exists.
          */
         fun selectByPk(pk:DeltaRepo.Item.Pk):Item?
 
@@ -47,7 +47,7 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
         fun merge(local:Item?,remote:Item):Item
 
         /**
-         * delete all where [DeltaRepo.Item.pk] in [pks].
+         * delete all where [DeltaRepo.Item.Metadata.pk] in [pks].
          */
         fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
     }
@@ -79,7 +79,7 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
 
     /**
      * inserts [items] into the repo. replaces any existing record with
-     * conflicting [DeltaRepo.Item.pk].
+     * conflicting [DeltaRepo.Item.Metadata.pk].
      *
      * may be used by [SimpleMirrorRepo]s to merge new records into the [SimpleMasterRepo].
      *
@@ -108,7 +108,7 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
     }
 
     /**
-     * delete all where [DeltaRepo.Item.pk] in [pks].
+     * delete all where [DeltaRepo.Item.Metadata.pk] in [pks].
      */
     private fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
     {
