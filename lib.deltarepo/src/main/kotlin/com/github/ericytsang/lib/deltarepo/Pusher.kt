@@ -70,11 +70,11 @@ class Pusher<Item:DeltaRepo.Item<Item>>(private val adapter:Pusher.Adapter<Item>
 
     data class PushBatch1Result<Item:DeltaRepo.Item<Item>>
     internal constructor(
-        internal val remote:Remote<Item>,
-        internal val localRepoInterRepoId:DeltaRepo.RepoPk,
-        internal val remoteRepoInterRepoId:DeltaRepo.RepoPk,
-        internal val toPush:List<Item>)
+        val remote:Remote<Item>,
+        val localRepoInterRepoId:DeltaRepo.RepoPk,
+        val remoteRepoInterRepoId:DeltaRepo.RepoPk,
+        val toPush:List<Item>)
     data class PushBatch2Result<Item:DeltaRepo.Item<Item>>
     internal constructor(
-        internal val toPush:List<Item>)
+        val toPush:List<Item>)
 }

@@ -197,15 +197,15 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
 
     data class PullBatch1Result<Item:DeltaRepo.Item<Item>>
     internal constructor(
-        internal val remote:Remote<Item>,
-        internal val localRepoInterRepoId:DeltaRepo.RepoPk,
-        internal val remoteRepoInterRepoId:DeltaRepo.RepoPk,
-        internal val maxUpdateStamp:Long)
+        val remote:Remote<Item>,
+        val localRepoInterRepoId:DeltaRepo.RepoPk,
+        val remoteRepoInterRepoId:DeltaRepo.RepoPk,
+        val maxUpdateStamp:Long)
     data class PullBatch2Result<Item:DeltaRepo.Item<Item>>
     internal constructor(
-        internal val localRepoInterRepoId:DeltaRepo.RepoPk,
-        internal val remoteRepoInterRepoId:DeltaRepo.RepoPk,
-        internal val pulledItems:List<Item>,
-        internal val remoteDeleteCount:Int,
-        internal val remoteExistingDeletedItemsCount:Int)
+        val localRepoInterRepoId:DeltaRepo.RepoPk,
+        val remoteRepoInterRepoId:DeltaRepo.RepoPk,
+        val pulledItems:List<Item>,
+        val remoteDeleteCount:Int,
+        val remoteExistingDeletedItemsCount:Int)
 }
