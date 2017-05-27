@@ -80,6 +80,57 @@ class IntegrationTest
     }
 
     @Test
+    fun undeleteTest()
+    {
+        insertTest()
+
+        // delete records from mirror2 & insert record into mirror1
+        run {
+            mirror1.insertOrReplace(listOf(MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,true,"pks[5]")))
+        }
+
+        // sync mirror2 records to master & mirrors
+        run {
+            // merge into master
+            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
+        }
+
+        // delete records from mirror2 & insert record into mirror1
+        run {
+            mirror1.insertOrReplace(listOf(MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[5]")))
+        }
+
+        // sync mirror2 records to master & mirrors
+        run {
+            // merge into master
+            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
+        }
+
+        // delete records from mirror2 & insert record into mirror1
+        run {
+            mirror1.insertOrReplace(listOf(MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,true,"pks[5]")))
+        }
+
+        // sync mirror2 records to master & mirrors
+        run {
+            // merge into master
+            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
+
+            // pull from master into mirror1 & mirror2
+            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
+            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
+        }
+
+        // check records are deleted in all repos and merging is as expected
+        check(mirror1Adapter.selectByPk(pks[5].value)?.isDeleted == true)
+        // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
+        check(masterAdapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(!mirror1RedownloadedEverything)
+        check(!mirror2RedownloadedEverything)
+    }
+
+    @Test
     fun delete2RecordsTest()
     {
         insertTest()

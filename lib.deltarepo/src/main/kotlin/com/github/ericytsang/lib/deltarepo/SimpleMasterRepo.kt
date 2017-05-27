@@ -104,6 +104,8 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
                 syncStatus = DeltaRepo.Item.SyncStatus.PULLED)}
             .partition {it.metadata.isDeleted}
         val _toInsert = toInsert
+            // modify delete count to reflect un-deleting an item
+            .map {if (adapter.selectByPk(it.metadata.pk)?.metadata?.isDeleted?:false) adapter.deleteCount--;it}
             .toSet()
             .asSequence()
             .map {it.copy(
@@ -127,7 +129,7 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
             .map {
 
                 // increment delete count
-                adapter.deleteCount += 1
+                adapter.deleteCount++
 
                 // set deleted flag
                 it.copy(
