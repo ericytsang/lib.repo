@@ -22,7 +22,7 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
          * persistent, mutable integer initialized to 0. used by context to count
          * the number of records that are deleted by [deleteByPk].
          */
-        var deleteCount:Int
+        var destructiveDeleteCount:Int
 
         /**
          * returns the [Item] whose [DeltaRepo.Item.Metadata.pk] == [pk]; null if not exists.
@@ -112,13 +112,11 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
         // remoteDeleteCount since there is no way we will miss any "delete"
         // updates when synchronizing starting from nothing.
         val shouldAdoptRemoteDeleteCount = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1,null).isEmpty()
-        if (shouldAdoptRemoteDeleteCount) adapter.deleteCount = remoteDeleteCount-remoteExistingDeletedItemsCount
+        if (shouldAdoptRemoteDeleteCount) adapter.destructiveDeleteCount = remoteDeleteCount
 
         // process remote items and insert into db
         pulledItems
             .asSequence()
-            // count the number of records deleted on master
-            .map {if (it.metadata.isDeleted) adapter.deleteCount++;it}
             // localize updates
             .localized(localRepoInterRepoId,remoteRepoInterRepoId)
             // lookup the existing item...
@@ -144,6 +142,7 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
             val itemsToDelete = deletedItems.drop(numItemsToRetain).map {it.metadata.pk}.toSet()
             if (itemsToDelete.isNotEmpty())
             {
+                adapter.destructiveDeleteCount += itemsToDelete.size
                 adapter.deleteByPk(itemsToDelete)
             }
         }
@@ -157,13 +156,13 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
                 true
             }
         // set status of all PULLED items to PUSHED, and sync them one batch at a time.
-            adapter.deleteCount != remoteDeleteCount ->
+            adapter.destructiveDeleteCount != remoteDeleteCount ->
             {
                 adapter.setAllPulledToPushed()
                 true
             }
         // delete all pushed records (they did not exist on the master)
-            adapter.deleteCount == remoteDeleteCount ->
+            adapter.destructiveDeleteCount == remoteDeleteCount ->
             {
                 adapter.deleteAllPushed()
                 false

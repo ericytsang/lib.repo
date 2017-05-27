@@ -21,7 +21,7 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
          * persistent, mutable integer initialized to 0. used by context to count
          * the number of records that are deleted by [deleteByPk].
          */
-        var deleteCount:Int
+        var destructiveDeleteCount:Int
 
         fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
 
@@ -79,7 +79,7 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
         {
             return Puller.Remote.Result(
                 adapter.pageByUpdateStamp(start,order,limit,null),
-                adapter.deleteCount,
+                adapter.destructiveDeleteCount,
                 adapter.rowsWhereIsDeletedCount)
         }
     }
@@ -104,8 +104,6 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
                 syncStatus = DeltaRepo.Item.SyncStatus.PULLED)}
             .partition {it.metadata.isDeleted}
         val _toInsert = toInsert
-            // modify delete count to reflect un-deleting an item
-            .map {if (adapter.selectByPk(it.metadata.pk)?.metadata?.isDeleted?:false) adapter.deleteCount--;it}
             .toSet()
             .asSequence()
             .map {it.copy(
@@ -127,10 +125,6 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
             .asSequence()
             .filter {!it.metadata.isDeleted}
             .map {
-
-                // increment delete count
-                adapter.deleteCount++
-
                 // set deleted flag
                 it.copy(
                     updateStamp = adapter.computeNextUpdateStamp(),
@@ -154,6 +148,7 @@ open class SimpleMasterRepo<Item:DeltaRepo.Item<Item>>(protected val adapter:Ada
             val itemsToDelete = items.drop(numItemsToRetain).map {it.metadata.pk}.toSet()
             if (itemsToDelete.isNotEmpty())
             {
+                adapter.destructiveDeleteCount += itemsToDelete.size
                 adapter.deleteByPk(itemsToDelete)
             }
         }

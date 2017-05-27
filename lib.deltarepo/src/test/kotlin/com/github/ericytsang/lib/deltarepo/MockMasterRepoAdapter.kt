@@ -8,7 +8,7 @@ class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem>
 
     override val MAX_DELETED_ITEMS_TO_RETAIN:Int = 3
 
-    override var deleteCount:Int = 0
+    override var destructiveDeleteCount:Int = 0
 
     override fun selectByPk(pk:DeltaRepo.Item.Pk):MockItem?
     {

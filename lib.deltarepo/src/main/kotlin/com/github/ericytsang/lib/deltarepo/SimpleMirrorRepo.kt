@@ -36,7 +36,7 @@ open class SimpleMirrorRepo<Item:DeltaRepo.Item<Item>>(private val adapter:Adapt
     {
         override val BATCH_SIZE:Int get() = adapter.BATCH_SIZE
 
-        override var deleteCount:Int
+        override var destructiveDeleteCount:Int
             get() = adapter.deleteCount
             set(value) { adapter.deleteCount = value }
 
