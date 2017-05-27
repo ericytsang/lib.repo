@@ -107,9 +107,6 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
 
     fun pullBatch1(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):PullBatch1Result<Item>
     {
-        // make sure there are no dirty rows
-        check(!adapter.hasDirtyRows()) {"no dirty rows in repo allowed when pulling."}
-
         // pull data
         val maxUpdateStampItem = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1,null).singleOrNull()
         val maxUpdateStamp = maxUpdateStampItem?.metadata?.updateStamp?.plus(1) ?: Long.MIN_VALUE
@@ -131,6 +128,9 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
         val (localRepoInterRepoId,remoteRepoInterRepoId,pulledItems,
             remoteDeleteCount,remoteExistingDeletedItemsCount)
             = prevResult
+
+        // make sure there are no dirty rows
+        check(!adapter.hasDirtyRows()) {"no dirty rows in repo allowed when pulling."}
 
         // if this is synchronizing from the very beginning, we should adopt the
         // remoteDeleteCount since there is no way we will miss any "delete"
