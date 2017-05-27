@@ -4,22 +4,26 @@ import org.junit.Test
 
 class IntegrationTest
 {
+    var mirror1RedownloadedEverything = false
+    var mirror2RedownloadedEverything = false
 
     // create test subjects
     val mirror1Adapter = MockMirrorRepoAdapter()
     val mirror1 = SimpleMirrorRepo(object:SimpleMirrorRepo.Adapter<MockItem> by mirror1Adapter
     {
-        override fun deleteAllPushed()
+        override fun setAllPulledToPushed()
         {
-            mirror1Adapter.deleteAllPushed()
+            mirror1RedownloadedEverything = true
+            mirror1Adapter.setAllPulledToPushed()
         }
     })
     val mirror2Adapter = MockMirrorRepoAdapter()
     val mirror2 = SimpleMirrorRepo(object:SimpleMirrorRepo.Adapter<MockItem> by mirror2Adapter
     {
-        override fun deleteAllPushed()
+        override fun setAllPulledToPushed()
         {
-            mirror2Adapter.deleteAllPushed()
+            mirror2RedownloadedEverything = true
+            mirror2Adapter.setAllPulledToPushed()
         }
     })
     val masterAdapter = MockMasterRepoAdapter()
@@ -70,6 +74,8 @@ class IntegrationTest
             check(mirror1Adapter.records.values.all {it.updateStamp != null})
             check(mirror2Adapter.records.values.all {it.string.count {it == 'p'} == 1})
             check(mirror1Adapter.records.values.all {it.string.count {it == 'p'} == 2})
+            check(!mirror1RedownloadedEverything)
+            check(!mirror2RedownloadedEverything)
         }
     }
 
@@ -102,6 +108,8 @@ class IntegrationTest
         check(masterAdapter.selectByPk(pks[6].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(mirror2Adapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(mirror2Adapter.selectByPk(pks[6].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(!mirror1RedownloadedEverything)
+        check(!mirror2RedownloadedEverything)
     }
 
     @Test
@@ -141,6 +149,8 @@ class IntegrationTest
         check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror1RedownloadedEverything)
+        check(mirror2RedownloadedEverything)
     }
 
     @Test
@@ -183,6 +193,8 @@ class IntegrationTest
         check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
         check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror1RedownloadedEverything)
+        check(mirror2RedownloadedEverything)
     }
 
     @Test
@@ -210,6 +222,8 @@ class IntegrationTest
         check(mirror1Adapter.selectByPk(pks[7].value)?.string == "pks[7]pks[7]pks[7]pee") {mirror1Adapter.selectByPk(pks[7].value)?.string ?: ""}
         check(masterAdapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "pks[7]pee")
         check(mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "peepks[7]pee")
+        check(!mirror1RedownloadedEverything)
+        check(!mirror2RedownloadedEverything)
     }
 
     @Test
@@ -242,6 +256,8 @@ class IntegrationTest
         check(mirror1Adapter.selectByPk(pks[7].value)?.string == "poopks[7]peepoo")
         check(masterAdapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "pks[7]peepoo")
         check(mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "peepks[7]peepoo")
+        check(!mirror1RedownloadedEverything)
+        check(!mirror2RedownloadedEverything)
 
         // sync mirror1 records to master & mirrors
         run {
@@ -257,5 +273,7 @@ class IntegrationTest
         check(mirror1Adapter.selectByPk(pks[7].value)?.string == "poopks[7]peepoo") {mirror1Adapter.selectByPk(pks[7].value)?.string!!}
         check(masterAdapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "pks[7]peepoo")
         check(mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "peepks[7]peepoo")
+        check(!mirror1RedownloadedEverything)
+        check(!mirror2RedownloadedEverything)
     }
 }
