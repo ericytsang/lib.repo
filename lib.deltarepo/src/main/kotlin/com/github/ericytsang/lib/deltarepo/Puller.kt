@@ -100,13 +100,37 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
 
     fun pullBatch(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):Boolean
     {
+        return pullBatch1(remote,localRepoInterRepoId,remoteRepoInterRepoId)
+            .let {pullBatch2(it)}
+            .let {pullBatch3(it)}
+    }
+
+    fun pullBatch1(remote:Remote<Item>,localRepoInterRepoId:DeltaRepo.RepoPk,remoteRepoInterRepoId:DeltaRepo.RepoPk):PullBatch1Result<Item>
+    {
         // make sure there are no dirty rows
         check(!adapter.hasDirtyRows()) {"no dirty rows in repo allowed when pulling."}
 
         // pull data
         val maxUpdateStampItem = adapter.pagePulledByUpdateStamp(Long.MAX_VALUE,Order.DESC,1,null).singleOrNull()
         val maxUpdateStamp = maxUpdateStampItem?.metadata?.updateStamp?.plus(1) ?: Long.MIN_VALUE
-        val (pulledItems,remoteDeleteCount,remoteExistingDeletedItemsCount) = remote.pageByUpdateStamp(maxUpdateStamp,Order.ASC,adapter.BATCH_SIZE)
+        return PullBatch1Result(remote,localRepoInterRepoId,remoteRepoInterRepoId,maxUpdateStamp)
+    }
+
+    fun pullBatch2(prevResult:PullBatch1Result<Item>):PullBatch2Result<Item>
+    {
+        val (remote,localRepoInterRepoId,remoteRepoInterRepoId,maxUpdateStamp)
+            = prevResult
+        val (pulledItems,remoteDeleteCount,remoteExistingDeletedItemsCount)
+            = remote.pageByUpdateStamp(maxUpdateStamp,Order.ASC,adapter.BATCH_SIZE)
+        return PullBatch2Result(localRepoInterRepoId,remoteRepoInterRepoId,
+            pulledItems,remoteDeleteCount,remoteExistingDeletedItemsCount)
+    }
+
+    fun pullBatch3(prevResult:PullBatch2Result<Item>):Boolean
+    {
+        val (localRepoInterRepoId,remoteRepoInterRepoId,pulledItems,
+            remoteDeleteCount,remoteExistingDeletedItemsCount)
+            = prevResult
 
         // if this is synchronizing from the very beginning, we should adopt the
         // remoteDeleteCount since there is no way we will miss any "delete"
@@ -170,4 +194,18 @@ class Puller<Item:DeltaRepo.Item<Item>>(private val adapter:Adapter<Item>)
             else -> throw RuntimeException("else branch executed")
         }
     }
+
+    data class PullBatch1Result<Item:DeltaRepo.Item<Item>>
+    internal constructor(
+        internal val remote:Remote<Item>,
+        internal val localRepoInterRepoId:DeltaRepo.RepoPk,
+        internal val remoteRepoInterRepoId:DeltaRepo.RepoPk,
+        internal val maxUpdateStamp:Long)
+    data class PullBatch2Result<Item:DeltaRepo.Item<Item>>
+    internal constructor(
+        internal val localRepoInterRepoId:DeltaRepo.RepoPk,
+        internal val remoteRepoInterRepoId:DeltaRepo.RepoPk,
+        internal val pulledItems:List<Item>,
+        internal val remoteDeleteCount:Int,
+        internal val remoteExistingDeletedItemsCount:Int)
 }
