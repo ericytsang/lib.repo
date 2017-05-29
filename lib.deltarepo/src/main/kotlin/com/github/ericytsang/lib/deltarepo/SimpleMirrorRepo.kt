@@ -5,16 +5,22 @@ open class SimpleMirrorRepo<Item:DeltaRepo.Item<Item>>(private val adapter:Adapt
     interface Adapter<Item:DeltaRepo.Item<Item>>
     {
         val BATCH_SIZE:Int
-        var deleteCount:Int
+        var destructiveDeleteCount:Int
         var nextId:Long
         fun insertOrReplace(item:Item)
         fun selectDirtyItemsToPush(limit:Int):List<Item>
         fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
         fun selectByPk(pk:DeltaRepo.Item.Pk):Item?
-        fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
+        fun pageByUpdateStamp(start:Long,order:Order,limit:Int,pulledOnly:Boolean,isDeleted:Boolean?):List<Item>
         fun merge(dirtyLocalItem:Item?,pulledRemoteItem:Item):Item
         fun setAllPulledToPushed()
         fun deleteAllPushed()
+
+        /**
+         * number of rows in the database where
+         * [DeltaRepo.Item.Metadata.isDeleted] == true.
+         */
+        val rowsWhereIsDeletedCount:Int
     }
 
     override val pusher = Pusher(object:Pusher.Adapter<Item>
@@ -37,8 +43,8 @@ open class SimpleMirrorRepo<Item:DeltaRepo.Item<Item>>(private val adapter:Adapt
         override val BATCH_SIZE:Int get() = adapter.BATCH_SIZE
 
         override var destructiveDeleteCount:Int
-            get() = adapter.deleteCount
-            set(value) { adapter.deleteCount = value }
+            get() = adapter.destructiveDeleteCount
+            set(value) { adapter.destructiveDeleteCount = value }
 
         override fun selectByPk(pk:DeltaRepo.Item.Pk):Item?
         {
@@ -47,7 +53,7 @@ open class SimpleMirrorRepo<Item:DeltaRepo.Item<Item>>(private val adapter:Adapt
 
         override fun pagePulledByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
         {
-            return adapter.pagePulledByUpdateStamp(start,order,limit,isDeleted)
+            return adapter.pageByUpdateStamp(start,order,limit,true,isDeleted)
         }
 
         override fun merge(dirtyLocalItem:Item?,pulledRemoteItem:Item):Item
@@ -81,6 +87,17 @@ open class SimpleMirrorRepo<Item:DeltaRepo.Item<Item>>(private val adapter:Adapt
         }
     })
 
+    override val pullTarget = object:Puller.Remote<Item>
+    {
+        override fun pageByUpdateStamp(start:Long,order:Order,limit:Int):Puller.Remote.Result<Item>
+        {
+            return Puller.Remote.Result(
+                adapter.pageByUpdateStamp(start,order,limit,false,null),
+                adapter.destructiveDeleteCount,
+                adapter.rowsWhereIsDeletedCount)
+        }
+    }
+
     /**
      * inserts [items] into the repo. replaces any existing record with the same
      * [DeltaRepo.Item.pk].
@@ -97,9 +114,10 @@ open class SimpleMirrorRepo<Item:DeltaRepo.Item<Item>>(private val adapter:Adapt
             .asSequence()
             .map {
                 val existing = adapter.selectByPk(it.metadata.pk)
+                val updateStamp = adapter.pageByUpdateStamp(Long.MAX_VALUE,Order.DESC,1,false,null).singleOrNull()?.metadata?.updateStamp?.plus(1) ?: Long.MIN_VALUE
                 it.copy(
                     syncStatus = DeltaRepo.Item.SyncStatus.DIRTY,
-                    updateStamp = existing?.metadata?.updateStamp)
+                    updateStamp = updateStamp);//existing?.metadata?.updateStamp)
             }
         itemsToInsert.forEach {adapter.insertOrReplace(it)}
         return itemsToInsert.toSet()

@@ -27,7 +27,7 @@ class SimpleMirrorRepoTest
                     ?: throw RuntimeException("insert failed")
             }
             check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
-            check(inserted.updateStamp == null)
+            check(inserted.updateStamp == Long.MIN_VALUE)
             check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
         }
 
@@ -41,7 +41,7 @@ class SimpleMirrorRepoTest
                     ?: throw RuntimeException("insert failed")
             }
             check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
-            check(inserted.updateStamp == null)
+            check(inserted.updateStamp == Long.MIN_VALUE+1)
             check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
         }
 
@@ -55,7 +55,7 @@ class SimpleMirrorRepoTest
                     ?: throw RuntimeException("insert failed")
             }
             check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
-            check(inserted.updateStamp == null)
+            check(inserted.updateStamp == Long.MIN_VALUE+2)
             check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
         }
 
@@ -89,7 +89,7 @@ class SimpleMirrorRepoTest
                     ?: throw RuntimeException("insert failed")
             }
             check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
-            check(inserted.updateStamp == null)
+            check(inserted.updateStamp == Long.MIN_VALUE+5)
             check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
         }
     }
@@ -106,7 +106,8 @@ class SimpleMirrorRepoTest
                 testSubjectAdapter.selectByPk(item.pk.value)
                     ?: throw RuntimeException("insert failed")
             }
-            check(inserted.copy(syncStatus = item.syncStatus) == item)
+            check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
+            check(inserted.updateStamp == Long.MIN_VALUE)
             check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
             check(!inserted.isDeleted)
         }
@@ -119,7 +120,8 @@ class SimpleMirrorRepoTest
             val inserted = run {
                 testSubjectAdapter.records[item.pk] ?: throw RuntimeException("insert failed")
             }
-            check(inserted.copy(syncStatus = item.syncStatus) == item)
+            check(inserted.copy(updateStamp = item.updateStamp,syncStatus = item.syncStatus) == item)
+            check(inserted.updateStamp == Long.MIN_VALUE+1)
             check(inserted.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY)
             check(inserted.isDeleted)
         }

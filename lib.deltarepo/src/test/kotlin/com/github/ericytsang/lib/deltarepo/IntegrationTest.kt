@@ -362,6 +362,38 @@ class IntegrationTest
     }
 
     @Test
+    fun pullMirrorIntoMirrorTest()
+    {
+        insertTest()
+
+        // delete more records from mirror2 such that mirror1 will need to resync
+        run {
+            mirror2.deleteByPk(setOf(pks[0].value.copy(repoPk = mirror1Id)))
+            mirror2.deleteByPk(setOf(pks[1].value.copy(repoPk = mirror1Id)))
+            mirror2.deleteByPk(setOf(pks[2].value.copy(repoPk = mirror1Id)))
+            mirror2.deleteByPk(setOf(pks[3].value.copy(repoPk = mirror1Id)))
+        }
+
+        // sync mirror2 records to master & mirrors
+        run {
+            // pull from mirror2 into mirror1
+            mirror1.puller.pullAll(mirror2.pullTarget,mirror1Id,mirror2Id)
+        }
+
+        // check records are deleted in all repos and merging is as expected
+        check(mirror1Adapter.selectByPk(pks[0].value)?.isDeleted == true)
+        check(mirror1Adapter.selectByPk(pks[1].value)?.isDeleted == true)
+        check(mirror1Adapter.selectByPk(pks[2].value)?.isDeleted == true)
+        check(mirror1Adapter.selectByPk(pks[3].value)?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[0].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
+        check(!mirror1RedownloadedEverything)
+        check(!mirror2RedownloadedEverything)
+    }
+
+    @Test
     fun mergeMirrorIntoMasterTest()
     {
         insertTest()
