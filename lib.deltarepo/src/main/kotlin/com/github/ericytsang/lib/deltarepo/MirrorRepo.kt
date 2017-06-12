@@ -75,12 +75,14 @@ class MirrorRepo(private val adapter:Adapter)
                 .filter {!it.isDeleted}
                 .lastOrNull()
                 ?.updateSequence
+                ?.plus(1)
                 ?:adapter.latestIsNotDeletedUpdateSequence
             adapter.latestIsDeletedUpdateSequence = pulledItems
                 .asSequence()
                 .filter {it.isDeleted}
                 .lastOrNull()
                 ?.updateSequence
+                ?.plus(1)
                 ?:
                 run {
                     // if this is the first pull (repo is empty or re-syncing) adopt remote's minimum delete start

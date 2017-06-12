@@ -1,475 +1,137 @@
-//package com.github.ericytsang.lib.deltarepo
-//
-//import org.junit.Test
-//
-//class IntegrationTest
-//{
-//    var mirror1RedownloadedEverything = false
-//    var mirror2RedownloadedEverything = false
-//
-//    // create test subjects
-//    val mirror1Adapter = MockMirrorRepoAdapter()
-//    val mirror1 = SimpleMirrorRepo(object:SimpleMirrorRepo.Adapter<MockItem> by mirror1Adapter
-//    {
-//        override fun setAllPulledToPushed()
-//        {
-//            mirror1RedownloadedEverything = true
-//            mirror1Adapter.setAllPulledToPushed()
-//        }
-//    })
-//    val mirror2Adapter = MockMirrorRepoAdapter()
-//    val mirror2 = SimpleMirrorRepo(object:SimpleMirrorRepo.Adapter<MockItem> by mirror2Adapter
-//    {
-//        override fun setAllPulledToPushed()
-//        {
-//            mirror2RedownloadedEverything = true
-//            mirror2Adapter.setAllPulledToPushed()
-//        }
-//    })
-//    val masterAdapter = MockMasterRepoAdapter()
-//    val master = SimpleMasterRepo(masterAdapter)
-//
-//    // create pks
-//    val pks = (1..10).map {MockItem.Pk(mirror1.computeNextPk())}
-//
-//    // inter repo ids
-//    val mirror1Id = DeltaRepo.RepoPk(0)
-//    val masterId = DeltaRepo.RepoPk(1)
-//    val mirror2Id = DeltaRepo.RepoPk(2)
-//
-//    @Test
-//    fun insertTest()
-//    {
-//        // insert records into mirror1
-//        mirror1.insertOrReplace(listOf(
-//            MockItem(pks[0],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[0]"),
-//            MockItem(pks[1],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[1]"),
-//            MockItem(pks[2],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[2]"),
-//            MockItem(pks[3],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[3]"),
-//            MockItem(pks[4],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[4]"),
-//            MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[5]"),
-//            MockItem(pks[6],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[6]"),
-//            MockItem(pks[7],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[7]"),
-//            MockItem(pks[8],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[8]"),
-//            MockItem(pks[9],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[9]")))
-//
-//        // sync records to master & mirror2
-//        run {
-//            // merge into master
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//
-//            // pull from master into mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check records are in all repos
-//        run {
-//            check(mirror2Adapter.records.keys.map {it.value}.containsAll(pks.map {it.value.copy(repoPk = mirror1Id)}))
-//            check(mirror2Adapter.records.values.all {it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED})
-//            check(mirror1Adapter.records.values.all {it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED})
-//            check(mirror2Adapter.records.values.all {!it.isDeleted})
-//            check(mirror1Adapter.records.values.all {!it.isDeleted})
-//            check(mirror2Adapter.records.values.all {it.updateStamp != null})
-//            check(mirror1Adapter.records.values.all {it.updateStamp != null})
-//            check(mirror2Adapter.records.values.all {it.string.count {it == 'p'} == 1})
-//            check(mirror1Adapter.records.values.all {it.string.count {it == 'p'} == 2})
-//            check(!mirror1RedownloadedEverything)
-//            check(!mirror2RedownloadedEverything)
-//        }
-//    }
-//
-//    @Test
-//    fun undeleteTest1()
-//    {
-//        insertTest()
-//
-//        // delete records from mirror2 & insert record into mirror1
-//        run {
-//            mirror1.insertOrReplace(listOf(MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,true,"pks[5]")))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//        }
-//
-//        // delete records from mirror2 & insert record into mirror1
-//        run {
-//            mirror1.insertOrReplace(listOf(MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[5]")))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//        }
-//
-//        // delete records from mirror2 & insert record into mirror1
-//        run {
-//            mirror1.insertOrReplace(listOf(MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,true,"pks[5]")))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check records are deleted in all repos and merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[5].value)?.isDeleted == true)
-//        // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
-//        check(masterAdapter.select(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(!mirror1RedownloadedEverything)
-//        check(!mirror2RedownloadedEverything)
-//    }
-//
-//    @Test
-//    fun undeleteTest2()
-//    {
-//        insertTest()
-//
-//        // delete records from mirror2 & insert record into mirror1
-//        run {
-//            mirror1.insertOrReplace(listOf(MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,true,"pks[5]")))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // delete records from mirror2 & insert record into mirror1
-//        run {
-//            mirror1.insertOrReplace(listOf(MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,false,"pks[5]")))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // delete records from mirror2 & insert record into mirror1
-//        run {
-//            mirror1.insertOrReplace(listOf(MockItem(pks[5],null,DeltaRepo.Item.SyncStatus.DIRTY,true,"pks[5]")))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check records are deleted in all repos and merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[5].value)?.isDeleted == true)
-//        // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
-//        check(masterAdapter.select(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(!mirror1RedownloadedEverything)
-//        check(!mirror2RedownloadedEverything)
-//    }
-//
-//    @Test
-//    fun delete2RecordsTest()
-//    {
-//        insertTest()
-//
-//        // delete records from mirror2 & insert record into mirror1
-//        run {
-//            mirror2.deleteByPk(setOf(pks[5].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[6].value.copy(repoPk = mirror1Id)))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check records are deleted in all repos and merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[5].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[6].value)?.isDeleted == true)
-//        // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
-//        check(masterAdapter.select(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(masterAdapter.select(pks[6].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[5].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[6].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(!mirror1RedownloadedEverything)
-//        check(!mirror2RedownloadedEverything)
-//    }
-//
-//    @Test
-//    fun delete4RecordsTest1()
-//    {
-//        insertTest()
-//
-//        // delete more records from mirror2 such that mirror1 will need to resync
-//        run {
-//            mirror2.deleteByPk(setOf(pks[0].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[1].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[2].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[3].value.copy(repoPk = mirror1Id)))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check records are deleted in all repos and merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[0].value) == null)
-//        check(mirror1Adapter.selectByPk(pks[1].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[2].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[3].value)?.isDeleted == true)
-//        // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
-//        check(masterAdapter.select(pks[0].value.copy(repoPk = mirror1Id)) == null)
-//        check(masterAdapter.select(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(masterAdapter.select(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(masterAdapter.select(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[0].value.copy(repoPk = mirror1Id)) == null)
-//        check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror1RedownloadedEverything)
-//        check(mirror2RedownloadedEverything)
-//    }
-//
-//    @Test
-//    fun delete4RecordsTest2()
-//    {
-//        insertTest()
-//
-//        // delete more records from mirror2 such that mirror1 will need to resync
-//        run {
-//            mirror2.deleteByPk(setOf(pks[0].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[1].value.copy(repoPk = mirror1Id)))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // delete more records from mirror2 such that mirror1 will need to resync
-//        run {
-//            mirror2.deleteByPk(setOf(pks[2].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[3].value.copy(repoPk = mirror1Id)))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check records are deleted in all repos and merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[0].value) == null)
-//        check(mirror1Adapter.selectByPk(pks[1].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[2].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[3].value)?.isDeleted == true)
-//        // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
-//        check(masterAdapter.select(pks[0].value.copy(repoPk = mirror1Id)) == null)
-//        check(masterAdapter.select(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(masterAdapter.select(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(masterAdapter.select(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[0].value.copy(repoPk = mirror1Id)) == null)
-//        check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror1RedownloadedEverything)
-//        check(!mirror2RedownloadedEverything)
-//    }
-//
-//    @Test
-//    fun pushedRecordsDeletedBeforePullTest()
-//    {
-//        insertTest()
-//
-//        // delete more records from mirror2 such that mirror1 will need to resync
-//        run {
-//            mirror2.deleteByPk(setOf(pks[0].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[1].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[2].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[3].value.copy(repoPk = mirror1Id)))
-//            val item = mirror1Adapter.selectByPk(pks[0].value)!!
-//            mirror1.insertOrReplace(setOf(item.copy(string = "pee")))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check records are deleted in all repos and merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[0].value) == null)
-//        check(mirror1Adapter.selectByPk(pks[1].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[2].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[3].value)?.isDeleted == true)
-//        // (up to 3 (number is defined by adapter) deleted records are kept on master repo)
-//        check(masterAdapter.select(pks[0].value.copy(repoPk = mirror1Id)) == null)
-//        check(masterAdapter.select(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(masterAdapter.select(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(masterAdapter.select(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[0].value.copy(repoPk = mirror1Id)) == null)
-//        check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror1RedownloadedEverything)
-//        check(mirror2RedownloadedEverything)
-//    }
-//
-//    @Test
-//    fun pullMirrorIntoMirrorTest()
-//    {
-//        insertTest()
-//
-//        // delete more records from mirror2 such that mirror1 will need to resync
-//        run {
-//            mirror2.deleteByPk(setOf(pks[0].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[1].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[2].value.copy(repoPk = mirror1Id)))
-//            mirror2.deleteByPk(setOf(pks[3].value.copy(repoPk = mirror1Id)))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // pull from mirror2 into mirror1
-//            mirror1.puller.pullAll(mirror2.pullTarget,mirror1Id,mirror2Id)
-//        }
-//
-//        // check records are deleted in all repos and merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[0].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[1].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[2].value)?.isDeleted == true)
-//        check(mirror1Adapter.selectByPk(pks[3].value)?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[0].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[1].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[2].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(mirror2Adapter.selectByPk(pks[3].value.copy(repoPk = mirror1Id))?.isDeleted == true)
-//        check(!mirror1RedownloadedEverything)
-//        check(!mirror2RedownloadedEverything)
-//    }
-//
-//    @Test
-//    fun mergeMirrorIntoMasterTest()
-//    {
-//        insertTest()
-//
-//        // delete records from mirror2 & insert record into mirror1
-//        run {
-//            val item = mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))!!
-//            mirror2.insertOrReplace(setOf(item.copy(string = "pee")))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check records are deleted in all repos and merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[7].value)?.string == "pks[7]pks[7]pks[7]pee") {mirror1Adapter.selectByPk(pks[7].value)?.string ?: ""}
-//        check(masterAdapter.select(pks[7].value.copy(repoPk = mirror1Id))?.string == "pks[7]pee")
-//        check(mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "peepks[7]pee")
-//        check(!mirror1RedownloadedEverything)
-//        check(!mirror2RedownloadedEverything)
-//    }
-//
-//    @Test
-//    fun mergeMasterIntoMirrorTest()
-//    {
-//        insertTest()
-//
-//        // delete records from mirror2 & insert record into mirror1
-//        run {
-//            val item = mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))!!
-//            mirror2.insertOrReplace(setOf(item.copy(string = "pee")))
-//        }
-//        run {
-//            val item = mirror1Adapter.selectByPk(pks[7].value)!!
-//            mirror1.insertOrReplace(setOf(item.copy(string = "poo")))
-//        }
-//
-//        // sync mirror2 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror2.pusher.pushAll(master.pushTarget,mirror2Id,masterId)
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check records are deleted in all repos and merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[7].value)?.string == "poopks[7]peepoo")
-//        check(masterAdapter.select(pks[7].value.copy(repoPk = mirror1Id))?.string == "pks[7]peepoo")
-//        check(mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "peepks[7]peepoo")
-//        check(!mirror1RedownloadedEverything)
-//        check(!mirror2RedownloadedEverything)
-//
-//        // sync mirror1 records to master & mirrors
-//        run {
-//            // merge into master
-//            mirror1.pusher.pushAll(master.pushTarget,mirror1Id,masterId)
-//
-//            // pull from master into mirror1 & mirror2
-//            mirror1.puller.pullAll(master.pullTarget,mirror1Id,masterId)
-//            mirror2.puller.pullAll(master.pullTarget,mirror2Id,masterId)
-//        }
-//
-//        // check that merging is as expected
-//        check(mirror1Adapter.selectByPk(pks[7].value)?.string == "poopks[7]peepoo") {mirror1Adapter.selectByPk(pks[7].value)?.string!!}
-//        check(masterAdapter.select(pks[7].value.copy(repoPk = mirror1Id))?.string == "pks[7]peepoo")
-//        check(mirror2Adapter.selectByPk(pks[7].value.copy(repoPk = mirror1Id))?.string == "peepks[7]peepoo")
-//        check(!mirror1RedownloadedEverything)
-//        check(!mirror2RedownloadedEverything)
-//    }
-//}
+package com.github.ericytsang.lib.deltarepo
+
+import org.junit.Test
+
+class IntegrationTest
+{
+    var mirrorRedownloadedEverything = false
+
+    // create test subjects
+    val mirrorAdapter = MockMirrorRepoAdapter()
+    val mirror = MirrorRepo(object:MirrorRepo.Adapter by mirrorAdapter
+    {
+        override fun prepareForResync()
+        {
+            mirrorRedownloadedEverything = true
+            mirrorAdapter.prepareForResync()
+        }
+    })
+    val masterAdapter = MockMasterRepoAdapter()
+    val master = MasterRepo(masterAdapter)
+
+    val item1 = MockItem(0,Long.MIN_VALUE+0,false,"0")
+    val item2 = MockItem(1,Long.MIN_VALUE+1,false,"1")
+    val item3 = MockItem(2,Long.MIN_VALUE+2,false,"2")
+    val item4 = MockItem(3,Long.MIN_VALUE+3,false,"3")
+    val item5 = MockItem(4,Long.MIN_VALUE+4,false,"4")
+    val item6 = MockItem(5,Long.MIN_VALUE+5,false,"5")
+
+    @Test
+    fun insertTest()
+    {
+        // insert records into master
+        master.insertOrReplace(item1)
+        master.insertOrReplace(item2)
+        master.insertOrReplace(item3)
+        master.insertOrReplace(item4)
+        master.insertOrReplace(item5)
+        master.insertOrReplace(item6)
+
+        // sync records to mirrors
+        run {
+            mirror.pullAll(master)
+        }
+
+        // check records are in all repos
+        run {
+            check(mirrorAdapter.records[0] == item1)
+            check(mirrorAdapter.records[1] == item2)
+            check(mirrorAdapter.records[2] == item3)
+            check(mirrorAdapter.records[3] == item4)
+            check(mirrorAdapter.records[4] == item5)
+            check(mirrorAdapter.records[5] == item6)
+            check(!mirrorRedownloadedEverything)
+        }
+    }
+
+    @Test
+    fun undeleteTest()
+    {
+        delete2RecordsTest()
+
+        // undelete a record
+        master.insertOrReplace(item6)
+
+        // sync
+        mirror.pullAll(master)
+
+        // check records are deleted in all repos and merging is as expected
+        run {
+            check(mirrorAdapter.records[0] == item1)
+            check(mirrorAdapter.records[1] == item2)
+            check(mirrorAdapter.records[2] == item3)
+            check(mirrorAdapter.records[3] == item4)
+            check(mirrorAdapter.records[4] == null)
+            check(mirrorAdapter.records[5] == item6.copy(updateSequence = Long.MIN_VALUE+8))
+            check(!mirrorRedownloadedEverything)
+        }
+    }
+
+    @Test
+    fun delete2RecordsTest()
+    {
+        insertTest()
+
+        // delete records from mirror2 & insert record into mirror1
+        run {
+            master.delete(item5)
+            master.delete(item6)
+        }
+
+        // sync master to mirror
+        run {
+            mirror.pullAll(master)
+        }
+
+        // check records are deleted in all repos and merging is as expected
+        run {
+            check(mirrorAdapter.records[0] == item1)
+            check(mirrorAdapter.records[1] == item2)
+            check(mirrorAdapter.records[2] == item3)
+            check(mirrorAdapter.records[3] == item4)
+            check(mirrorAdapter.records[4] == null)
+            check(mirrorAdapter.records[5] == null)
+            check(!mirrorRedownloadedEverything)
+        }
+    }
+
+    @Test
+    fun delete4RecordsTest()
+    {
+        insertTest()
+
+        // delete more records from mirror2 such that mirror1 will need to resync
+        run {
+            master.delete(item1)
+            master.delete(item2)
+            master.delete(item5)
+            master.delete(item6)
+        }
+
+        // sync master to mirror
+        run {
+            mirror.pullAll(master)
+        }
+
+        // check records are deleted in all repos and merging is as expected
+        run {
+            check(mirrorAdapter.records[0] == null)
+            check(mirrorAdapter.records[1] == null)
+            check(mirrorAdapter.records[2] == item3)
+            check(mirrorAdapter.records[3] == item4)
+            check(mirrorAdapter.records[4] == null)
+            check(mirrorAdapter.records[5] == null)
+            check(mirrorRedownloadedEverything)
+        }
+    }
+}
