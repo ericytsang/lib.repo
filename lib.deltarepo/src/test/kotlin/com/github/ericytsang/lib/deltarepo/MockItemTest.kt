@@ -10,6 +10,6 @@ class MockItemTest
     fun serializeableTest()
     {
         val out = ObjectOutputStream(ByteArrayOutputStream())
-        out.writeObject(MockItem(MockItem.Pk(DeltaRepo.Item.Pk(DeltaRepo.RepoPk(0),DeltaRepo.ItemPk(0))),3,DeltaRepo.Item.SyncStatus.PULLED,false,""))
+        out.writeObject(MockItem(0,0,false,""))
     }
 }

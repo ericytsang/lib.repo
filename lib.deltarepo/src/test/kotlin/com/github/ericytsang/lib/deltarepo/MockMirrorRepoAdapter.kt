@@ -1,69 +1,39 @@
 package com.github.ericytsang.lib.deltarepo
 
-class MockMirrorRepoAdapter:SimpleMirrorRepo.Adapter<MockItem>
+class MockMirrorRepoAdapter:MirrorRepo.Adapter
 {
-    val records = mutableMapOf<MockItem.Pk,MockItem>()
-
-    override val rowsWhereIsDeletedCount:Int get()
-    {
-        return records.values.count {it.isDeleted}
-    }
-
+    val records = mutableMapOf<Long,MockItem>()
     override val BATCH_SIZE:Int = 3
+    override var latestIsDeletedUpdateSequence:Long = Long.MIN_VALUE
+    override var latestIsNotDeletedUpdateSequence:Long = Long.MIN_VALUE
 
-    override var destructiveDeleteCount:Int = 0
-
-    override fun selectByPk(pk:DeltaRepo.Item.Pk):MockItem?
+    override fun merge(items:List<Item>)
     {
-        return records[MockItem.Pk(pk)]
-    }
+        items.forEach {
+            it as MockItem
+            if (it.isDeleted)
+                records.remove(it.pk)
+            else
+                records[it.pk] = it
 
-    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,pulledOnly:Boolean,isDeleted:Boolean?):List<MockItem>
-    {
-        return records.values
-            .asSequence()
-            .filter {it.updateStamp != null}
-            .sortedBy {it.updateStamp}
-            .filter {it.isDeleted == isDeleted?:it.isDeleted}
-            .filter {order.isAfterOrEqual(start,it.updateStamp!!)}
-            .filter {!pulledOnly || it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED}
-            .toList()
-            .let {if (order == Order.DESC) it.asReversed() else it}
-            .take(limit)
-    }
-
-    override fun insertOrReplace(item:MockItem)
-    {
-        records[item.pk] = item
-    }
-
-    override fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
-    {
-        records.values.removeAll {it.pk.value in pks}
-    }
-
-    override fun setAllPulledToPushed()
-    {
-        records.values.filter {it.syncStatus == DeltaRepo.Item.SyncStatus.PULLED}.forEach()
-        {
-            records[it.pk] = it.copy(syncStatus = DeltaRepo.Item.SyncStatus.PUSHED)
         }
     }
 
-    override fun merge(dirtyLocalItem:MockItem?,pulledRemoteItem:MockItem):MockItem
+    override fun prepareForResync()
     {
-        return if (dirtyLocalItem == null) pulledRemoteItem else pulledRemoteItem.copy(string = dirtyLocalItem.string+pulledRemoteItem.string)
+        val allPks = records.keys.toList()
+        allPks.forEach {
+            val record = records[it]!!
+            records[it] = record.copy(isDeleted = true)
+        }
     }
 
-    override var nextId = Long.MIN_VALUE
-
-    override fun selectDirtyItemsToPush(limit:Int):List<MockItem>
+    override fun completeResync()
     {
-        return records.values.filter {it.syncStatus == DeltaRepo.Item.SyncStatus.DIRTY}.take(limit)
-    }
-
-    override fun deleteAllPushed()
-    {
-        records.values.removeAll {it.syncStatus == DeltaRepo.Item.SyncStatus.PUSHED}
+        val allPks = records.keys.toList()
+        allPks.forEach {
+            val record = records[it]!!
+            if (record.isDeleted) records.remove(it)
+        }
     }
 }

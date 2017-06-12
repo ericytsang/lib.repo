@@ -1,55 +1,38 @@
 package com.github.ericytsang.lib.deltarepo
 
-class MockMasterRepoAdapter:SimpleMasterRepo.Adapter<MockItem>
+class MockMasterRepoAdapter:MasterRepo.Adapter
 {
-    val records = mutableMapOf<MockItem.Pk,MockItem>()
-
+    val records = mutableMapOf<Long,MockItem>()
     override val BATCH_SIZE:Int = 3
+    override val MAX_DELETED_ROWS_TO_RETAIN:Int = 3
+    override var minimumIsDeletedStart:Long = Long.MIN_VALUE
 
-    override val MAX_DELETED_ITEMS_TO_RETAIN:Int = 3
-
-    override var destructiveDeleteCount:Int = 0
-
-    override fun selectByPk(pk:DeltaRepo.Item.Pk):MockItem?
+    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
     {
-        return records[MockItem.Pk(pk)]
-    }
-
-    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<MockItem>
-    {
-        return records.values
-            .filter {it.updateStamp != null}
-            .sortedBy {it.updateStamp}
-            .filter {order.isAfterOrEqual(start,it.updateStamp!!)}
-            .filter {isDeleted == null || it.isDeleted == isDeleted}
+        return records
+            .values
+            .filter {it.isDeleted == isDeleted?:it.isDeleted}
+            .filter {order.isAfterOrEqual(start,it.updateSequence)}
+            .sortedBy {it.updateSequence}
             .let {if (order == Order.DESC) it.asReversed() else it}
             .take(limit)
     }
 
-    override fun insertOrReplace(items:Iterable<MockItem>)
+    override fun select(item:Item):Item?
     {
-        items.forEach {records[it.pk] = it}
+        item as MockItem
+        return records[item.pk]
     }
 
-    override fun merge(local:MockItem?,remote:MockItem):MockItem
+    override fun insertOrReplace(item:Item)
     {
-        return if (local == null) remote else remote.copy(string = local.string+remote.string)
+        item as MockItem
+        records[item.pk] = item
     }
 
-    override fun deleteByPk(pks:Set<DeltaRepo.Item.Pk>)
+    override fun delete(item:Item)
     {
-        records.values.removeAll {it.pk.value in pks}
-    }
-
-    private var prevUpdateStamp = 0L//todo Long.MIN_VALUE
-
-    override fun computeNextUpdateStamp():Long
-    {
-        return prevUpdateStamp++
-    }
-
-    override val rowsWhereIsDeletedCount:Int get()
-    {
-        return records.values.count {it.isDeleted}
+        item as MockItem
+        records.remove(item.pk)
     }
 }

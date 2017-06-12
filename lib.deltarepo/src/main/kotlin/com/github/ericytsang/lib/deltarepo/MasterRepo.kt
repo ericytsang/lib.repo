@@ -14,6 +14,23 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
 
         fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
 
+        /**
+         * selects the record from persistent memoy that is logically equivalent
+         * to [item]; null if not exists.
+         */
+        fun select(item:Item):Item?
+
+        /**
+         * inserts [item] into persistent memory. replaces any existing record
+         * if it represents the same item.
+         */
+        fun insertOrReplace(item:Item)
+
+        /**
+         * deletes [item] from persistent memory.
+         */
+        fun delete(item:Item)
+
         fun countDeletedRowsEqOrGtUpdateSequence(updateSequence:Long):Int
         {
             var start = updateSequence
@@ -27,52 +44,33 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
             while (true)
             return count
         }
-
-        fun selectByPk(pk:Item.Pk):Item?
-
-        /**
-         * inserts [item] into the repo. replaces any existing record with the same
-         * [DeltaRepo.Item.Metadata.pk].
-         */
-        fun insertOrReplace(item:Item)
-
-        /**
-         * deletes all records where [DeltaRepo.Item.Metadata.pk] in [pks].
-         */
-        fun deleteByPk(pk:Item.Pk)
     }
 
     fun insertOrReplace(item:Item)
     {
         // insert the item with updated metadata
         adapter.insertOrReplace(item._copy(
-            updateSequence = computeNextUpdateSequence(),
-            syncStatus = Item.SyncStatus.PULLED))
+            updateSequence = computeNextUpdateSequence()))
 
         // physically delete the oldest items that are flagged as delete until
         // there are only MAX_DELETED_ROWS_TO_RETAIN items flagged as deleted
-        var itemsToPhysicallyDelete = adapter.MAX_DELETED_ROWS_TO_RETAIN-adapter.countDeletedRowsEqOrGtUpdateSequence(Long.MIN_VALUE)
+        var itemsToPhysicallyDelete = adapter.countDeletedRowsEqOrGtUpdateSequence(Long.MIN_VALUE)-adapter.MAX_DELETED_ROWS_TO_RETAIN
         while (itemsToPhysicallyDelete > 0)
         {
             val selectionLimit = Math.min(adapter.BATCH_SIZE,itemsToPhysicallyDelete)
             itemsToPhysicallyDelete -= selectionLimit
             val toDelete = adapter.pageByUpdateStamp(Long.MIN_VALUE,Order.ASC,selectionLimit,true)
             adapter.minimumIsDeletedStart = toDelete.last().updateSequence+1
-            toDelete.forEach {adapter.deleteByPk(it.pk)}
+            toDelete.forEach {adapter.delete(it)}
         }
     }
 
-    fun deleteByPk(pk:Item.Pk)
+    fun delete(item:Item)
     {
         // flag the item as deleted
-        val existing = adapter.selectByPk(pk) ?: return
+        val existing = adapter.select(item) ?: return
         insertOrReplace(existing._copy(
             isDeleted = true))
-    }
-
-    override fun push(items:List<Item>)
-    {
-        items.forEach {insertOrReplace(it)}
     }
 
     /**
