@@ -51,6 +51,13 @@ class MirrorRepo(private val adapter:Adapter)
         fun completeResync()
     }
 
+    fun forceResync()
+    {
+        adapter.latestIsDeletedUpdateSequence = Long.MIN_VALUE
+        adapter.latestIsNotDeletedUpdateSequence = Long.MIN_VALUE
+        adapter.prepareForResync()
+    }
+
     fun pullAll(remote:Remote)
     {
         while (pullBatch(remote));
@@ -58,10 +65,37 @@ class MirrorRepo(private val adapter:Adapter)
 
     fun pullBatch(remote:Remote):Boolean
     {
-        // pull data
+        return pullBatchPhase3(pullBatchPhase2(pullBatchPhase1(remote)))
+    }
+
+    fun pullBatchPhase1(remote:Remote):PullBatchPhase1Result
+    {
         val isNotDeletedStart = adapter.latestIsNotDeletedUpdateSequence
         val isDeletedStart = adapter.latestIsDeletedUpdateSequence
+        return PullBatchPhase1Result(remote,isNotDeletedStart,isDeletedStart)
+    }
+
+    data class PullBatchPhase1Result(
+        val remote:Remote,
+        val isNotDeletedStart:Long,
+        val isDeletedStart:Long)
+
+    fun pullBatchPhase2(result:PullBatchPhase1Result):PullBatchPhase2Result
+    {
+        val (remote,isNotDeletedStart,isDeletedStart) = result
         val (pulledItems,minimumIsDeletedStart) = remote.pull(isNotDeletedStart,isDeletedStart,adapter.BATCH_SIZE)
+        return PullBatchPhase2Result(isNotDeletedStart,isDeletedStart,pulledItems,minimumIsDeletedStart)
+    }
+
+    data class PullBatchPhase2Result(
+        val isNotDeletedStart:Long,
+        val isDeletedStart:Long,
+        val pulledItems:List<Item>,
+        val minimumIsDeletedStart:Long)
+
+    fun pullBatchPhase3(result:PullBatchPhase2Result):Boolean
+    {
+        val (isNotDeletedStart,isDeletedStart,pulledItems,minimumIsDeletedStart) = result
 
         // if we didn't miss any deletes, insert rows into db
         return if (adapter.latestIsDeletedUpdateSequence >= minimumIsDeletedStart
@@ -114,9 +148,7 @@ class MirrorRepo(private val adapter:Adapter)
         // else deletes were missed, prepare for more intense syncing
         else
         {
-            adapter.latestIsDeletedUpdateSequence = Long.MIN_VALUE
-            adapter.latestIsNotDeletedUpdateSequence = Long.MIN_VALUE
-            adapter.prepareForResync()
+            forceResync()
             true
         }
     }

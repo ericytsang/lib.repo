@@ -8,7 +8,8 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
         val MAX_DELETED_ROWS_TO_RETAIN:Int
 
         /**
-         * should be initialized as [Long.MIN_VALUE] at database creation.
+         * should be initialized as [Long.MIN_VALUE] at database creation. this
+         * variable keeps track of the latest destructively deleted row.
          */
         var minimumIsDeletedStart:Long
 
