@@ -1,8 +1,8 @@
 package com.github.ericytsang.lib.deltarepo
 
-class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
+class MasterRepo<E:Item<E>>(private val adapter:Adapter<E>):MirrorRepo.Remote<E>
 {
-    interface Adapter
+    interface Adapter<E:Item<E>>
     {
         val BATCH_SIZE:Int
         val MAX_DELETED_ROWS_TO_RETAIN:Int
@@ -13,14 +13,14 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
          */
         var minimumIsDeletedStart:Long
 
-        fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
+        fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<E>
 
         /**
          * selects by [Item.updateSequence] the rows that are candidates to be
          * destructively deleted with a call to [delete]. useful for repos that
          * may have delete updates that need to be pushed up to a server.
          */
-        fun pageRowsToDeleteByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+        fun pageRowsToDeleteByUpdateStamp(start:Long,order:Order,limit:Int):List<E>
         {
             return pageByUpdateStamp(start,order,limit,true)
         }
@@ -29,18 +29,18 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
          * selects the record from persistent memory that is logically equivalent
          * to [item]; null if not exists.
          */
-        fun select(item:Item):Item?
+        fun select(item:E):E?
 
         /**
          * inserts [item] into persistent memory. replaces any existing record
          * if it represents the same item.
          */
-        fun insertOrReplace(item:Item)
+        fun insertOrReplace(item:E)
 
         /**
          * deletes [item] from persistent memory.
          */
-        fun delete(item:Item)
+        fun delete(item:E)
 
         fun countDeletedRowsEqOrGtUpdateSequence(updateSequence:Long):Int
         {
@@ -57,7 +57,7 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
         }
     }
 
-    fun insertOrReplace(item:Item)
+    fun insertOrReplace(item:E)
     {
         // insert the item with updated metadata
         adapter.insertOrReplace(item._copy(
@@ -76,7 +76,7 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
         }
     }
 
-    fun delete(item:Item)
+    fun delete(item:E)
     {
         // flag the item as deleted
         val existing = adapter.select(item) ?: return
@@ -91,7 +91,7 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
      * @param isDeletedStart is the maximum [Item.updateSequence] where [Item.isDeleted] == true.
      * @param limit is the maximum number of items to return from the data store.
      */
-    override fun pull(isNotDeletedStart:Long,isDeletedStart:Long,limit:Int):MirrorRepo.Remote.Result
+    override fun pull(isNotDeletedStart:Long,isDeletedStart:Long,limit:Int):MirrorRepo.Remote.Result<E>
     {
         require(limit >= 0)
         val deletedItems = adapter.pageByUpdateStamp(isDeletedStart,Order.ASC,limit,true)

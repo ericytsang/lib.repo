@@ -1,13 +1,13 @@
 package com.github.ericytsang.lib.deltarepo
 
-class MockMasterRepoAdapter:MasterRepo.Adapter
+class MockMasterRepoAdapter:MasterRepo.Adapter<MockItem>
 {
     val records = mutableMapOf<Long,MockItem>()
     override val BATCH_SIZE:Int = 3
     override val MAX_DELETED_ROWS_TO_RETAIN:Int = 3
     override var minimumIsDeletedStart:Long = Long.MIN_VALUE
 
-    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
+    override fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<MockItem>
     {
         return records
             .values
@@ -18,21 +18,18 @@ class MockMasterRepoAdapter:MasterRepo.Adapter
             .take(limit)
     }
 
-    override fun select(item:Item):Item?
+    override fun select(item:MockItem):MockItem?
     {
-        item as MockItem
         return records[item.pk]
     }
 
-    override fun insertOrReplace(item:Item)
+    override fun insertOrReplace(item:MockItem)
     {
-        item as MockItem
         records[item.pk] = item
     }
 
-    override fun delete(item:Item)
+    override fun delete(item:MockItem)
     {
-        item as MockItem
         records.remove(item.pk)
     }
 }

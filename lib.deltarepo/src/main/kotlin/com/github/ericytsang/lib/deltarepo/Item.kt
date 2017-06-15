@@ -2,29 +2,29 @@ package com.github.ericytsang.lib.deltarepo
 
 import java.io.Serializable
 
-interface Item
+interface Item<C:Item<C>>
 {
     val updateSequence:Long
     val isDeleted:Boolean
-    fun copy(newData:Item):Item
+    fun copy(newData:SimpleItem):C
 }
 
-internal data class SimpleItem(
+data class SimpleItem(
     override val updateSequence:Long,
     override val isDeleted:Boolean):
-    Item,
+    Item<SimpleItem>,
     Serializable
 {
-    override fun copy(newData:Item):SimpleItem
+    override fun copy(newData:SimpleItem):SimpleItem
     {
         return copy(newData.updateSequence,newData.isDeleted)
     }
 }
 
-internal fun Item._copy(
+internal fun <S:Item<S>> S._copy(
     updateSequence:Long = this.updateSequence,
     isDeleted:Boolean = this.isDeleted):
-    Item
+    S
 {
     return copy(SimpleItem(updateSequence,isDeleted))
 }

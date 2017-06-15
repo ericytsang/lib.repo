@@ -1,21 +1,19 @@
 package com.github.ericytsang.lib.deltarepo
 
-class MockMirrorRepoAdapter:MirrorRepo.Adapter
+class MockMirrorRepoAdapter:MirrorRepo.Adapter<MockItem>
 {
     val records = mutableMapOf<Long,MockItem>()
     override val BATCH_SIZE:Int = 3
     override var latestIsDeletedUpdateSequence:Long = Long.MIN_VALUE
     override var latestIsNotDeletedUpdateSequence:Long = Long.MIN_VALUE
 
-    override fun merge(items:List<Item>)
+    override fun merge(items:List<MockItem>)
     {
         items.forEach {
-            it as MockItem
             if (it.isDeleted)
                 records.remove(it.pk)
             else
                 records[it.pk] = it
-
         }
     }
 

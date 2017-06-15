@@ -2,15 +2,15 @@ package com.github.ericytsang.lib.deltarepo
 
 import java.io.Serializable
 
-class MirrorRepo(private val adapter:Adapter)
+class MirrorRepo<E:Item<E>>(private val adapter:Adapter<E>)
 {
-    interface Remote
+    interface Remote<E:Item<E>>
     {
-        fun pull(isNotDeletedStart:Long,isDeletedStart:Long,limit:Int):Result
-        data class Result(val items:List<Item>,val minimumIsDeletedStart:Long):Serializable
+        fun pull(isNotDeletedStart:Long,isDeletedStart:Long,limit:Int):Result<E>
+        data class Result<E:Item<E>>(val items:List<E>,val minimumIsDeletedStart:Long):Serializable
     }
 
-    interface Adapter
+    interface Adapter<E:Item<E>>
     {
         /**
          * size of batch to use when doing incremental operations.
@@ -30,7 +30,7 @@ class MirrorRepo(private val adapter:Adapter)
         /**
          * inserts [items] into the repo.
          */
-        fun merge(items:List<Item>)
+        fun merge(items:List<E>)
 
         /**
          * invoked when it is detected that repo has missed some delete updates
@@ -58,42 +58,42 @@ class MirrorRepo(private val adapter:Adapter)
         adapter.prepareForResync()
     }
 
-    fun pullAll(remote:Remote)
+    fun pullAll(remote:Remote<E>)
     {
         while (pullBatch(remote));
     }
 
-    fun pullBatch(remote:Remote):Boolean
+    fun pullBatch(remote:Remote<E>):Boolean
     {
         return pullBatchPhase3(pullBatchPhase2(pullBatchPhase1(remote)))
     }
 
-    fun pullBatchPhase1(remote:Remote):PullBatchPhase1Result
+    fun pullBatchPhase1(remote:Remote<E>):PullBatchPhase1Result<E>
     {
         val isNotDeletedStart = adapter.latestIsNotDeletedUpdateSequence
         val isDeletedStart = adapter.latestIsDeletedUpdateSequence
         return PullBatchPhase1Result(remote,isNotDeletedStart,isDeletedStart)
     }
 
-    data class PullBatchPhase1Result(
-        val remote:Remote,
+    data class PullBatchPhase1Result<E:Item<E>>(
+        val remote:Remote<E>,
         val isNotDeletedStart:Long,
         val isDeletedStart:Long)
 
-    fun pullBatchPhase2(result:PullBatchPhase1Result):PullBatchPhase2Result
+    fun pullBatchPhase2(result:PullBatchPhase1Result<E>):PullBatchPhase2Result<E>
     {
         val (remote,isNotDeletedStart,isDeletedStart) = result
         val (pulledItems,minimumIsDeletedStart) = remote.pull(isNotDeletedStart,isDeletedStart,adapter.BATCH_SIZE)
         return PullBatchPhase2Result(isNotDeletedStart,isDeletedStart,pulledItems,minimumIsDeletedStart)
     }
 
-    data class PullBatchPhase2Result(
+    data class PullBatchPhase2Result<E:Item<E>>(
         val isNotDeletedStart:Long,
         val isDeletedStart:Long,
-        val pulledItems:List<Item>,
+        val pulledItems:List<E>,
         val minimumIsDeletedStart:Long)
 
-    fun pullBatchPhase3(result:PullBatchPhase2Result):Boolean
+    fun pullBatchPhase3(result:PullBatchPhase2Result<E>):Boolean
     {
         val (isNotDeletedStart,isDeletedStart,pulledItems,minimumIsDeletedStart) = result
 

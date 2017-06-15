@@ -7,10 +7,10 @@ data class MockItem(
     override val updateSequence:Long,
     override val isDeleted:Boolean,
     val string:String)
-    :Item
+    :Item<MockItem>
     ,Serializable
 {
-    override fun copy(newData:Item):Item
+    override fun copy(newData:SimpleItem):MockItem
     {
         return copy(pk,newData.updateSequence,newData.isDeleted,string)
     }

@@ -8,7 +8,7 @@ class IntegrationTest
 
     // create test subjects
     val mirrorAdapter = MockMirrorRepoAdapter()
-    val mirror = MirrorRepo(object:MirrorRepo.Adapter by mirrorAdapter
+    val mirror = MirrorRepo(object:MirrorRepo.Adapter<MockItem> by mirrorAdapter
     {
         override fun prepareForResync()
         {
