@@ -16,7 +16,17 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
         fun pageByUpdateStamp(start:Long,order:Order,limit:Int,isDeleted:Boolean?):List<Item>
 
         /**
-         * selects the record from persistent memoy that is logically equivalent
+         * selects by [Item.updateSequence] the rows that are candidates to be
+         * destructively deleted with a call to [delete]. useful for repos that
+         * may have delete updates that need to be pushed up to a server.
+         */
+        fun pageRowsToDeleteByUpdateStamp(start:Long,order:Order,limit:Int):List<Item>
+        {
+            return pageByUpdateStamp(start,order,limit,true)
+        }
+
+        /**
+         * selects the record from persistent memory that is logically equivalent
          * to [item]; null if not exists.
          */
         fun select(item:Item):Item?
@@ -38,7 +48,7 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
             var count = 0
             do
             {
-                val items = pageByUpdateStamp(start,Order.ASC,BATCH_SIZE,true)
+                val items = pageRowsToDeleteByUpdateStamp(start,Order.ASC,BATCH_SIZE)
                 start = items.lastOrNull()?.updateSequence?.plus(1) ?: break
                 count += items.size
             }
@@ -60,7 +70,7 @@ class MasterRepo(private val adapter:Adapter):MirrorRepo.Remote
         {
             val selectionLimit = Math.min(adapter.BATCH_SIZE,itemsToPhysicallyDelete)
             itemsToPhysicallyDelete -= selectionLimit
-            val toDelete = adapter.pageByUpdateStamp(Long.MIN_VALUE,Order.ASC,selectionLimit,true)
+            val toDelete = adapter.pageRowsToDeleteByUpdateStamp(Long.MIN_VALUE,Order.ASC,selectionLimit)
             adapter.minimumIsDeletedStart = toDelete.last().updateSequence+1
             toDelete.forEach {adapter.delete(it)}
         }
